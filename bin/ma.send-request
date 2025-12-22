@@ -56,17 +56,17 @@ where
 select f, "definition of MakeBinaryRegion"
 eof
 
-# Submit the MRVA job with the first query
+#* Submit the MRVA job with the first query
 cd ~/work-gh/mrva/gh-mrva/
 gh-mrva submit --language cpp --session mirva-session-4890 \
           --list mirva-list                                \
           --query ~/work-gh/mrva/gh-mrva/FlatBuffersFunc.ql
 
 
-# Check the status of the submitted session
+#* Check the status of the submitted session
 gh-mrva status --session mirva-session-4890
 
-# Download SARIF files and databases if there are results.  For the current
+#* Download SARIF files and databases if there are results.  For the current
 # query / database combination there are zero result hence no downloads
 cd ~/work-gh/mrva/gh-mrva/
 gh-mrva download --session mirva-session-4890   \
