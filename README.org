@@ -171,11 +171,11 @@
      #
      #* Start the containers
      cd ~/work-gh/mrva/mrva-docker/
-     docker-compose -f docker-compose-demo.yml down
+     docker compose -f docker-compose-demo.yml down
 
      docker ps
 
-     docker-compose -f docker-compose-demo.yml up 
+     docker compose -f docker-compose-demo.yml up 
 
      # # 
      # #* Populate the db container if needed.

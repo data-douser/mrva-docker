@@ -62,25 +62,30 @@ services:
         image: mrva-hepc-container:0.4.5
         container_name: mrva-hepc
         hostname: hepc
+        # /mrva/values/metadata.sql is required for hepc-serve-global
         volumes:
-            - /home/hohn/work-gh/mrva/mrvahepc/db-collection-host.tmp:/home/hohn/work-gh/mrva/mrvahepc/db-collection-host.tmp:ro
-            - /home/hohn/work-gh/mrva/mrva-open-source-download:/home/hohn/work-gh/mrva/mrva-open-source-download:ro
-        command: >-
-            host-hepc-serve --codeql-db-dir /home/hohn/work-gh/mrva/mrvahepc/db-collection-host.tmp
-            --host "0.0.0.0"
-            --port "8070"
+            - ${MRVA_VALUES_PATH:?MRVA_VALUES_PATH must be set}:/mrva/values:ro
+        # host access
+        ports:
+            - "8070:8070"
         networks:
             - backend
-        environment:
-            - MRVA_HEPC_ENDPOINT=http://hepc:8070
+
+        command: >-
+            hepc-serve-global 
+            --host "0.0.0.0"
+            --port "8070" 
+        # for other containers: MRVA_HEPC_ENDPOINT=http://hepc:8070
 
     rabbitmq:
-        image: rabbitmq:3-management
+        image: rabbitmq:3.13.7-management
         hostname: rabbitmq
         container_name: mrva-rabbitmq
         volumes:
-            - ./init/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-            - ./init/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+           - rabbitmq-data:/var/lib/rabbitmq
+        environment:
+            RABBITMQ_DEFAULT_USER: user
+            RABBITMQ_DEFAULT_PASS: password
         ports:
             - "5672:5672"
             - "15672:15672"
@@ -157,3 +162,4 @@ networks:
 
 volumes:
     pgdata:
+    rabbitmq-data:

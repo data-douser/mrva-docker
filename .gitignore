@@ -48,3 +48,6 @@ containers/hepc/mrvahepc/
 qpstore-data/
 artifacts/
 TAGS
+containers/agent/mrvaagent
+containers/ghmrva/gh-mrva
+containers/server/mrvaserver
