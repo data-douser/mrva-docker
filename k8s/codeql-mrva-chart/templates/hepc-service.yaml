@@ -1,0 +1,24 @@
+{{/*
+HEPC Service
+*/}}
+{{- if .Values.hepc.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "codeql-mrva-chart.hepc.fullname" . }}
+  labels:
+    {{- include "codeql-mrva-chart.hepc.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.hepc.service.type }}
+  ports:
+    - port: {{ .Values.hepc.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "codeql-mrva-chart.hepc.selectorLabels" . | nindent 4 }}
+{{- end }}

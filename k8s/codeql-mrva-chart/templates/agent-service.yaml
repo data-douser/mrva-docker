@@ -1,0 +1,24 @@
+{{/*
+MRVA Agent Service
+*/}}
+{{- if .Values.agent.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "codeql-mrva-chart.agent.fullname" . }}
+  labels:
+    {{- include "codeql-mrva-chart.agent.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.agent.service.type }}
+  ports:
+    - port: {{ .Values.agent.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "codeql-mrva-chart.agent.selectorLabels" . | nindent 4 }}
+{{- end }}

@@ -1,0 +1,64 @@
+{{/*
+gh-mrva Client Deployment
+*/}}
+{{- if .Values.ghmrva.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "codeql-mrva-chart.ghmrva.fullname" . }}
+  labels:
+    {{- include "codeql-mrva-chart.ghmrva.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "codeql-mrva-chart.ghmrva.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.ghmrva.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "codeql-mrva-chart.ghmrva.labels" . | nindent 8 }}
+        {{- with .Values.ghmrva.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "codeql-mrva-chart.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "codeql-mrva-chart.serviceAccountName" . }}
+      containers:
+        - name: ghmrva
+          image: "{{ .Values.ghmrva.image.repository }}:{{ .Values.ghmrva.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.ghmrva.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          env:
+            - name: SERVER_URL
+              value: "http://localhost:{{ .Values.server.service.port }}"
+            - name: MRVA_SERVER_URL
+              value: "http://{{ include "codeql-mrva-chart.server.fullname" . }}:{{ .Values.server.service.port }}"
+          command:
+            - tail
+            - -f
+            - /dev/null
+          {{- with .Values.ghmrva.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.ghmrva.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ghmrva.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ghmrva.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

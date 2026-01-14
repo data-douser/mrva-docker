@@ -1,0 +1,74 @@
+{{/*
+HEPC Deployment
+*/}}
+{{- if .Values.hepc.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "codeql-mrva-chart.hepc.fullname" . }}
+  labels:
+    {{- include "codeql-mrva-chart.hepc.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.hepc.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "codeql-mrva-chart.hepc.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.hepc.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "codeql-mrva-chart.hepc.labels" . | nindent 8 }}
+        {{- with .Values.hepc.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "codeql-mrva-chart.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "codeql-mrva-chart.serviceAccountName" . }}
+      {{- with .Values.hepc.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: hepc
+          {{- with .Values.hepc.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.hepc.image.repository }}:{{ .Values.hepc.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.hepc.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          {{- with .Values.hepc.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.hepc.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "codeql-mrva-chart.configmapName" . }}
+          {{- with .Values.hepc.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.hepc.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hepc.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hepc.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

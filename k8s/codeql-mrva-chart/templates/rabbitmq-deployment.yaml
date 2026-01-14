@@ -1,0 +1,99 @@
+{{/*
+RabbitMQ Deployment
+*/}}
+{{- if .Values.rabbitmq.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "codeql-mrva-chart.rabbitmq.fullname" . }}
+  labels:
+    {{- include "codeql-mrva-chart.rabbitmq.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "codeql-mrva-chart.rabbitmq.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.rabbitmq.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "codeql-mrva-chart.rabbitmq.labels" . | nindent 8 }}
+        {{- with .Values.rabbitmq.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "codeql-mrva-chart.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: rabbitmq
+          image: "{{ .Values.rabbitmq.image.repository }}:{{ .Values.rabbitmq.image.tag }}"
+          imagePullPolicy: {{ .Values.rabbitmq.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          ports:
+            - name: amqp
+              containerPort: {{ .Values.rabbitmq.service.port }}
+              protocol: TCP
+            - name: management
+              containerPort: {{ .Values.rabbitmq.service.managementPort }}
+              protocol: TCP
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: {{ .Values.rabbitmq.auth.username | quote }}
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "codeql-mrva-chart.secretName" . }}
+                  key: RABBITMQ_PASSWORD
+          {{- if .Values.rabbitmq.healthcheck.enabled }}
+          readinessProbe:
+            exec:
+              command:
+                - rabbitmq-diagnostics
+                - check_port_connectivity
+            initialDelaySeconds: {{ .Values.rabbitmq.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.rabbitmq.healthcheck.periodSeconds }}
+            timeoutSeconds: {{ .Values.rabbitmq.healthcheck.timeoutSeconds }}
+            failureThreshold: {{ .Values.rabbitmq.healthcheck.failureThreshold }}
+          livenessProbe:
+            exec:
+              command:
+                - rabbitmq-diagnostics
+                - check_port_connectivity
+            initialDelaySeconds: {{ .Values.rabbitmq.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.rabbitmq.healthcheck.periodSeconds }}
+            timeoutSeconds: {{ .Values.rabbitmq.healthcheck.timeoutSeconds }}
+            failureThreshold: {{ .Values.rabbitmq.healthcheck.failureThreshold }}
+          {{- end }}
+          {{- with .Values.rabbitmq.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.rabbitmq.persistence.enabled }}
+          volumeMounts:
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
+          {{- end }}
+      {{- if .Values.rabbitmq.persistence.enabled }}
+      volumes:
+        - name: rabbitmq-data
+          persistentVolumeClaim:
+            claimName: {{ include "codeql-mrva-chart.rabbitmq.fullname" . }}-data
+      {{- end }}
+      {{- with .Values.rabbitmq.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.rabbitmq.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.rabbitmq.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

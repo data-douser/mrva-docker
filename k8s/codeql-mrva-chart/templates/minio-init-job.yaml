@@ -1,0 +1,53 @@
+{{/*
+MinIO Init Job - Creates the bucket after MinIO starts
+*/}}
+{{- if and .Values.minio.enabled .Values.minio.initJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "codeql-mrva-chart.minio.fullname" . }}-init
+  labels:
+    {{- include "codeql-mrva-chart.minio.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "codeql-mrva-chart.minio.labels" . | nindent 8 }}
+    spec:
+      {{- include "codeql-mrva-chart.imagePullSecrets" . | nindent 6 }}
+      restartPolicy: OnFailure
+      containers:
+        - name: minio-init
+          image: "{{ .Values.minio.initJob.image.repository }}:{{ .Values.minio.initJob.image.tag }}"
+          imagePullPolicy: {{ .Values.minio.initJob.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          env:
+            - name: MINIO_ROOT_USER
+              value: {{ .Values.minio.rootUser | quote }}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "codeql-mrva-chart.secretName" . }}
+                  key: MINIO_ROOT_PASSWORD
+            - name: MINIO_ENDPOINT
+              value: {{ include "codeql-mrva-chart.minio.fullname" . }}:{{ .Values.minio.service.port }}
+            - name: BUCKET_NAME
+              value: {{ .Values.minio.bucketName | quote }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Waiting for MinIO to be ready..."
+              until mc alias set local http://${MINIO_ENDPOINT} ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}; do
+                echo "Waiting for MinIO..."
+                sleep 2
+              done
+              echo "Creating bucket ${BUCKET_NAME}..."
+              mc mb -p local/${BUCKET_NAME} || true
+              echo "Bucket setup complete."
+  backoffLimit: 10
+{{- end }}

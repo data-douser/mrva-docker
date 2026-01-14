@@ -1,0 +1,28 @@
+apiVersion: v2
+name: codeql-mrva-chart
+description: A Helm chart for deploying CodeQL Multi-Repository Variant Analysis (MRVA) on Kubernetes
+
+type: application
+
+# Chart version - follows Semantic Versioning (https://semver.org/)
+version: 0.1.0
+
+# Application version being deployed
+appVersion: "0.4.5"
+
+# Chart maintainers
+maintainers:
+  - name: MRVA Team
+
+# Keywords for chart discovery
+keywords:
+  - codeql
+  - mrva
+  - variant-analysis
+  - security
+  - code-scanning
+
+# Home and sources
+home: https://github.com/github/mrva-docker
+sources:
+  - https://github.com/github/mrva-docker

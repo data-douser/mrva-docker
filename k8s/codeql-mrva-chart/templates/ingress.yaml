@@ -1,0 +1,66 @@
+{{/*
+Ingress for external access to MRVA services
+*/}}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "codeql-mrva-chart.fullname" . }}
+  labels:
+    {{- include "codeql-mrva-chart.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                {{- if eq .service "server" }}
+                name: {{ include "codeql-mrva-chart.server.fullname" $ }}
+                port:
+                  number: {{ $.Values.server.service.port }}
+                {{- else if eq .service "codeserver" }}
+                name: {{ include "codeql-mrva-chart.codeserver.fullname" $ }}
+                port:
+                  number: {{ $.Values.codeServer.service.port }}
+                {{- else if eq .service "minio" }}
+                name: {{ include "codeql-mrva-chart.minio.fullname" $ }}
+                port:
+                  number: {{ $.Values.minio.service.port }}
+                {{- else if eq .service "minio-console" }}
+                name: {{ include "codeql-mrva-chart.minio.fullname" $ }}
+                port:
+                  number: {{ $.Values.minio.service.consolePort }}
+                {{- else if eq .service "rabbitmq" }}
+                name: {{ include "codeql-mrva-chart.rabbitmq.fullname" $ }}
+                port:
+                  number: {{ $.Values.rabbitmq.service.managementPort }}
+                {{- else }}
+                name: {{ include "codeql-mrva-chart.server.fullname" $ }}
+                port:
+                  number: {{ $.Values.server.service.port }}
+                {{- end }}
+          {{- end }}
+    {{- end }}
+{{- end }}
