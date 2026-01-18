@@ -30,7 +30,7 @@ server:
   replicaCount: 1
   image:
     # -- Server container image repository
-    repository: mrva-server
+    repository: codeql-mrva-server
     # -- Server container image tag (defaults to Chart.appVersion)
     tag: ""
     # -- Image pull policy
@@ -91,7 +91,7 @@ agent:
   replicaCount: 1
   image:
     # -- Agent container image repository
-    repository: mrva-agent
+    repository: codeql-mrva-agent
     # -- Agent container image tag (defaults to Chart.appVersion)
     tag: ""
     # -- Image pull policy
@@ -122,7 +122,8 @@ agent:
   securityContext: {}
 
 # =============================================================================
-# HEPC (HEPC Endpoint Provider Container) Configuration
+# HEPC (HTTP Endpoint Provider for CodeQL) Configuration
+# Supports both Python (mrva-hepc-container) and Go (mrva-go-hepc) implementations
 # =============================================================================
 hepc:
   # -- Enable the HEPC service (can be disabled if using external HEPC)
@@ -131,18 +132,27 @@ hepc:
   replicaCount: 1
   image:
     # -- HEPC container image repository
-    repository: mrva-hepc-container
+    # For Python: codeql-mrva-hepc-python (legacy)
+    # For Go: ghcr.io/<owner>/codeql-mrva-hepc
+    repository: codeql-mrva-hepc
     # -- HEPC container image tag (defaults to Chart.appVersion)
     tag: ""
     # -- Image pull policy
     pullPolicy: IfNotPresent
   # -- Command for HEPC container
+  # For Python: ["hepc-serve-global", "--host", "0.0.0.0", "--port", "8070"]
+  # For Go with local storage: ["hepc-server", "--storage", "local", "--host", "0.0.0.0", "--port", "8070", "--db-dir", "/data"]
+  # For Go with GCS: ["hepc-server", "--storage", "gcs", "--host", "0.0.0.0", "--port", "8070"]
   command:
-    - "hepc-serve-global"
+    - "hepc-server"
+    - "--storage"
+    - "local"
     - "--host"
     - "0.0.0.0"
     - "--port"
     - "8070"
+    - "--db-dir"
+    - "/data"
   service:
     # -- Service type (ClusterIP, NodePort, LoadBalancer)
     type: ClusterIP
@@ -150,8 +160,23 @@ hepc:
     port: 8070
   # -- Cache duration in seconds (0 disables caching)
   cacheDuration: "60"
-  # -- Values volume mount path (for metadata.sql)
+  # -- Values volume mount path (for metadata.sql - Python only)
   valuesPath: "/mrva/values"
+  # -- Storage configuration for Go HEPC
+  storage:
+    # -- Storage type: "local" or "gcs"
+    type: "local"
+    # -- Local storage: path to database directory
+    localPath: "/data"
+    # -- GCS storage configuration
+    gcs:
+      # -- GCS bucket name (required for gcs storage)
+      bucket: ""
+      # -- GCS object prefix (optional)
+      prefix: ""
+      # -- Path to GCS credentials file (optional, uses ADC if not set)
+      credentialsSecret: ""
+      credentialsKey: "credentials.json"
   # -- Resource requests and limits
   resources: {}
   # -- Node selector for pod assignment
@@ -170,6 +195,18 @@ hepc:
   securityContext: {}
   # -- External HEPC endpoint (used when hepc.enabled=false)
   externalEndpoint: ""
+  # -- Persistence for local storage
+  persistence:
+    # -- Enable persistent storage for database files
+    enabled: false
+    # -- Storage class (empty uses default)
+    storageClass: ""
+    # -- Access mode
+    accessMode: ReadWriteOnce
+    # -- Storage size
+    size: 50Gi
+    # -- Existing PVC to use (optional)
+    existingClaim: ""
 
 # =============================================================================
 # PostgreSQL Configuration
@@ -345,7 +382,7 @@ codeServer:
   enabled: false
   image:
     # -- Code-server image repository
-    repository: code-server-initialized
+    repository: codeql-mrva-vscode
     # -- Code-server image tag (defaults to Chart.appVersion)
     tag: ""
     # -- Image pull policy
@@ -378,7 +415,7 @@ ghmrva:
   enabled: false
   image:
     # -- gh-mrva image repository
-    repository: mrva-gh-mrva
+    repository: codeql-mrva-ghmrva
     # -- gh-mrva image tag (defaults to Chart.appVersion)
     tag: ""
     # -- Image pull policy
