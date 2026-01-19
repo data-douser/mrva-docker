@@ -59,7 +59,9 @@ COPY ./artifacts/vscode-codeql-*.vsix /home/coder/
 # Install VS Code extensions globally
 RUN code-server --install-extension ms-python.python \
     && code-server --install-extension esbenp.prettier-vscode \
-    && code-server --install-extension "$(ls -t /home/coder/vscode-codeql-*.vsix | head -n 1)" \
+    && VSIX_FILE=$(ls -t /home/coder/vscode-codeql-*.vsix 2>/dev/null | head -n 1) \
+    && if [ -z "$VSIX_FILE" ]; then echo "Error: No vscode-codeql VSIX file found"; exit 1; fi \
+    && code-server --install-extension "$VSIX_FILE" \
     && rm -f /home/coder/vscode-codeql-*.vsix
 
 # ======================
