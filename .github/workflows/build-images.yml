@@ -270,6 +270,30 @@ jobs:
       - name: Checkout mrva-docker
         uses: actions/checkout@v6
 
+      - name: Checkout vscode-codeql
+        uses: actions/checkout@v6
+        with:
+          repository: hohn/vscode-codeql
+          ref: mrva-standalone
+          path: vscode-codeql
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: vscode-codeql/extensions/ql-vscode/.nvmrc
+
+      - name: Build vscode-codeql extension
+        working-directory: vscode-codeql/extensions/ql-vscode
+        run: |
+          npm install -g @vscode/vsce
+          npm install
+          npm run build
+
+      - name: Copy extension to artifacts
+        run: |
+          mkdir -p containers/vscode/artifacts
+          cp vscode-codeql/dist/vscode-codeql-*.vsix containers/vscode/artifacts/
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

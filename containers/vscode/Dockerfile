@@ -53,14 +53,14 @@ USER coder
 # Set environment variables
 ENV PASSWORD=mrva
 
-# Copy all potential vscode-codeql builds
-COPY ./artifacts/vscode-codeql-1.13.2-* /home/coder/
+# Copy vscode-codeql extension build(s) - pattern matches any version
+COPY ./artifacts/vscode-codeql-*.vsix /home/coder/
 
 # Install VS Code extensions globally
 RUN code-server --install-extension ms-python.python \
     && code-server --install-extension esbenp.prettier-vscode \
-    && code-server --install-extension "$(ls -t /home/coder/vscode-codeql-1.13* | head -n 1)" \
-    && rm -f /home/coder/vscode-codeql-1.13*
+    && code-server --install-extension "$(ls -t /home/coder/vscode-codeql-*.vsix | head -n 1)" \
+    && rm -f /home/coder/vscode-codeql-*.vsix
 
 # ======================
 # Stage 5: Set CodeQL Java Home
