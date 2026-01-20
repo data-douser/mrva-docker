@@ -14,6 +14,12 @@ on:
         required: false
         default: 'all'
 
+# Top-level permissions for the entire workflow
+# Required for pushing to ghcr.io container registry
+permissions:
+  contents: read
+  packages: write
+
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
