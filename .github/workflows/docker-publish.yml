@@ -232,9 +232,6 @@ jobs:
           # HEPC uses the mrva-go-hepc Dockerfile directly
           ls -la ${{ matrix.context }}/${{ matrix.submodule_path }}/
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -244,6 +241,8 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          # Retry on transient failures
+          logout: false
 
       - name: Extract metadata
         id: meta
@@ -259,12 +258,36 @@ jobs:
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
+        # Retry the entire build step on failure
+        id: build-push
+        continue-on-error: true
         with:
           context: ${{ matrix.use_submodule_dockerfile && format('{0}/{1}', matrix.context, matrix.submodule_path) || matrix.context }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64
+          # Disable provenance to avoid attestation permission issues on forks
+          provenance: false
+          sbom: false
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+            COMMIT=${{ needs.prepare.outputs.commit }}
+            BUILD_TIME=${{ needs.prepare.outputs.build_time }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      - name: Retry build and push on failure
+        if: steps.build-push.outcome == 'failure'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.use_submodule_dockerfile && format('{0}/{1}', matrix.context, matrix.submodule_path) || matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
           build-args: |
             VERSION=${{ needs.prepare.outputs.version }}
             COMMIT=${{ needs.prepare.outputs.commit }}
