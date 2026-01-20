@@ -90,19 +90,19 @@ jobs:
       - name: Checkout mrvaserver
         uses: actions/checkout@v6
         with:
-          repository: hohn/mrvaserver
+          repository: ${{ github.repository_owner }}/mrvaserver
           path: external/mrvaserver
 
       - name: Checkout mrvaagent
         uses: actions/checkout@v6
         with:
-          repository: hohn/mrvaagent
+          repository: ${{ github.repository_owner }}/mrvaagent
           path: external/mrvaagent
 
       - name: Checkout mrvacommander
         uses: actions/checkout@v6
         with:
-          repository: hohn/mrvacommander
+          repository: ${{ github.repository_owner }}/mrvacommander
           path: external/mrvacommander
 
       - name: Set up Go
@@ -116,24 +116,24 @@ jobs:
         run: |
           go mod edit -replace github.com/hohn/mrvacommander=../mrvacommander
           go mod tidy
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o mrvaserver-linux-amd64 ./cmd/mrvaserver
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o mrvaserver-linux-amd64 .
 
       - name: Build mrvaserver (linux/arm64)
         working-directory: external/mrvaserver
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o mrvaserver-linux-arm64 ./cmd/mrvaserver
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o mrvaserver-linux-arm64 .
 
       - name: Build mrvaagent (linux/amd64)
         working-directory: external/mrvaagent
         run: |
           go mod edit -replace github.com/hohn/mrvacommander=../mrvacommander
           go mod tidy
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o mrvaagent-linux-amd64 ./cmd/mrvaagent
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o mrvaagent-linux-amd64 .
 
       - name: Build mrvaagent (linux/arm64)
         working-directory: external/mrvaagent
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o mrvaagent-linux-arm64 ./cmd/mrvaagent
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o mrvaagent-linux-arm64 .
 
       - name: Upload server binaries
         uses: actions/upload-artifact@v4
@@ -180,14 +180,14 @@ jobs:
             context: containers/hepc
             image_name: codeql-mrva-hepc
             needs_binary: false
-            submodule_repo: data-douser/mrva-go-hepc
+            submodule_repo: ${{ github.repository_owner }}/mrva-go-hepc
             submodule_path: mrva-go-hepc
             use_submodule_dockerfile: true
           - image: ghmrva
             context: containers/ghmrva
             image_name: codeql-mrva-ghmrva
             needs_binary: false
-            submodule_repo: hohn/gh-mrva
+            submodule_repo: ${{ github.repository_owner }}/gh-mrva
             submodule_path: gh-mrva
 
     permissions:
