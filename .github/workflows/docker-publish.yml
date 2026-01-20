@@ -106,8 +106,9 @@ jobs:
           path: external/mrvacommander
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
+          check-latest: true
           go-version: ${{ env.GO_VERSION }}
 
       - name: Build mrvaserver (linux/amd64)

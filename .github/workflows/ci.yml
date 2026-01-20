@@ -117,113 +117,34 @@ jobs:
           echo "Template rendering successful"
 
   # ==========================================================================
-  # Build Go binaries for server and agent
-  # ==========================================================================
-  build-go-binaries:
-    name: Build Go Binaries
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.server == 'true' || needs.detect-changes.outputs.agent == 'true' || github.event_name == 'push'
-    outputs:
-      server_binary: ${{ steps.upload.outputs.server_binary }}
-      agent_binary: ${{ steps.upload.outputs.agent_binary }}
-    steps:
-      - name: Checkout mrva-docker
-        uses: actions/checkout@v6
-
-      - name: Checkout mrvaserver
-        uses: actions/checkout@v6
-        with:
-          repository: hohn/mrvaserver
-          path: external/mrvaserver
-
-      - name: Checkout mrvaagent
-        uses: actions/checkout@v6
-        with:
-          repository: hohn/mrvaagent
-          path: external/mrvaagent
-
-      - name: Checkout mrvacommander (shared dependency)
-        uses: actions/checkout@v6
-        with:
-          repository: hohn/mrvacommander
-          path: external/mrvacommander
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Build mrvaserver binary
-        working-directory: external/mrvaserver
-        run: |
-          # Replace mrvacommander dependency with local path
-          go mod edit -replace github.com/hohn/mrvacommander=../mrvacommander
-          go mod tidy
-          CGO_ENABLED=0 GOOS=linux go build -o mrvaserver ./cmd/mrvaserver
-
-      - name: Build mrvaagent binary
-        working-directory: external/mrvaagent
-        run: |
-          # Replace mrvacommander dependency with local path
-          go mod edit -replace github.com/hohn/mrvacommander=../mrvacommander
-          go mod tidy
-          CGO_ENABLED=0 GOOS=linux go build -o mrvaagent ./cmd/mrvaagent
-
-      - name: Upload server binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: mrvaserver-binary
-          path: external/mrvaserver/mrvaserver
-          retention-days: 1
-
-      - name: Upload agent binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: mrvaagent-binary
-          path: external/mrvaagent/mrvaagent
-          retention-days: 1
-
-      - id: upload
-        run: |
-          echo "server_binary=mrvaserver-binary" >> $GITHUB_OUTPUT
-          echo "agent_binary=mrvaagent-binary" >> $GITHUB_OUTPUT
-
-  # ==========================================================================
   # Docker Build Tests (no push) - Matrix strategy
   # ==========================================================================
   docker-build-test:
     name: Docker Build Test
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-go-binaries]
+    needs: [detect-changes]
     # Run if any image changed, or always on push to main branch
-    if: |
-      always() &&
-      (needs.detect-changes.outputs.any_image == 'true' || github.ref == 'refs/heads/master')
+    if: needs.detect-changes.outputs.any_image == 'true' || github.ref == 'refs/heads/master'
     strategy:
       fail-fast: false
       matrix:
         include:
           - image: server
             context: containers/server
-            needs_binary: true
-            binary_artifact: mrvaserver-binary
-            binary_name: mrvaserver
+            go_repo: ${{ github.repository_owner }}/mrvaserver
+            go_binary: mrvaserver
           - image: agent
             context: containers/agent
-            needs_binary: true
-            binary_artifact: mrvaagent-binary
-            binary_name: mrvaagent
+            go_repo: ${{ github.repository_owner }}/mrvaagent
+            go_binary: mrvaagent
           - image: hepc
             context: containers/hepc
-            needs_binary: false
-            submodule_repo: data-douser/mrva-go-hepc
+            submodule_repo: ${{ github.repository_owner }}/mrva-go-hepc
             submodule_path: mrva-go-hepc
             use_submodule_dockerfile: true
           - image: ghmrva
             context: containers/ghmrva
-            needs_binary: false
-            submodule_repo: hohn/gh-mrva
+            submodule_repo: ${{ github.repository_owner }}/gh-mrva
             submodule_path: gh-mrva
             use_submodule_dockerfile: false
 
@@ -231,17 +152,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Download Go binary
-        if: matrix.needs_binary
-        uses: actions/download-artifact@v7
+      # Go binary build steps (for server and agent images)
+      - name: Checkout Go source repository
+        if: matrix.go_repo != ''
+        uses: actions/checkout@v6
         with:
-          name: ${{ matrix.binary_artifact }}
-          path: ${{ matrix.context }}
+          repository: ${{ matrix.go_repo }}
+          path: go-src
 
-      - name: Make binary executable
-        if: matrix.needs_binary
-        run: chmod +x ${{ matrix.context }}/${{ matrix.binary_name }}
+      - name: Checkout mrvacommander (shared dependency)
+        if: matrix.go_repo != ''
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/mrvacommander
+          path: mrvacommander
 
+      - name: Set up Go
+        if: matrix.go_repo != ''
+        uses: actions/setup-go@v6
+        with:
+          check-latest: true
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build Go binary
+        if: matrix.go_repo != ''
+        working-directory: go-src
+        run: |
+          go mod edit -replace github.com/${{ github.repository_owner }}/mrvacommander=../mrvacommander
+          go mod tidy
+          CGO_ENABLED=0 GOOS=linux go build -o ../${{ matrix.context }}/${{ matrix.go_binary }} ./cmd/${{ matrix.go_binary }}
+
+      # Submodule checkout (for hepc and ghmrva images)
       - name: Checkout submodule repository
         if: matrix.submodule_repo != ''
         uses: actions/checkout@v6
@@ -267,7 +208,7 @@ jobs:
   ci-summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [detect-changes, helm-lint, build-go-binaries, docker-build-test]
+    needs: [detect-changes, helm-lint, docker-build-test]
     if: always()
     steps:
       - name: Summary
@@ -277,7 +218,6 @@ jobs:
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Helm Lint | ${{ needs.helm-lint.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Go Binaries | ${{ needs.build-go-binaries.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker Build Test | ${{ needs.docker-build-test.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Changed Components" >> $GITHUB_STEP_SUMMARY
@@ -291,6 +231,5 @@ jobs:
       - name: Check for failures
         if: |
           needs.helm-lint.result == 'failure' ||
-          needs.build-go-binaries.result == 'failure' ||
           needs.docker-build-test.result == 'failure'
         run: exit 1
