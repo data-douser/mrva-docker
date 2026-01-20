@@ -54,6 +54,7 @@ Each skill lives in `.github/skills/<skill-name>/` with:
 - Include practical examples with code blocks
 - Add troubleshooting sections for common issues
 - Reference external documentation where appropriate
+- Fix broken links and lint / style issues (i.e. markdown lint) before finalizing
 
 ## REFERENCES
 

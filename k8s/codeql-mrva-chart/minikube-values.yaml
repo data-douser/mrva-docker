@@ -1,0 +1,147 @@
+# minikube-values.yaml
+# Values override for testing on Minikube with public GHCR images
+# Usage: helm install mrva ./k8s/codeql-mrva-chart -f production-values.yaml -f minikube-values.yaml --namespace mrva-test
+#
+# This file layers on top of production-values.yaml to adapt for local Minikube testing:
+# - Removes imagePullSecrets (public GHCR images don't need auth)
+# - Disables ingress (no ingress controller in default minikube)
+# - Disables network policies (simpler local testing)
+# - Reduces resource requests for constrained environments
+# - Smaller PVC sizes for local storage
+# - Uses test images for server/agent (not yet public on GHCR)
+
+# Global overrides for Minikube
+global:
+  # No imagePullSecrets needed for public GHCR images
+  imagePullSecrets: []
+  # Always pull to ensure we get latest public images
+  imagePullPolicy: Always
+
+# =============================================================================
+# Server - Use test image until GHCR image is public
+# =============================================================================
+server:
+  replicaCount: 1  # Single replica for local testing
+  image:
+    # Use local test image until ghcr.io/data-douser/codeql-mrva-server is public
+    repository: mrva-server
+    tag: "0.4.5"
+    pullPolicy: Never  # Use local image
+  # Clear args for test image
+  args: []
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# =============================================================================
+# Agent - Use test image until GHCR image is public
+# =============================================================================
+agent:
+  replicaCount: 1  # Single replica for local testing
+  image:
+    # Use local test image until ghcr.io/data-douser/codeql-mrva-agent is public
+    repository: mrva-agent
+    tag: "0.4.5"
+    pullPolicy: Never  # Use local image
+  # Clear args for test image
+  args: []
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+# =============================================================================
+# HEPC - Use real GHCR image (it's public!)
+# =============================================================================
+hepc:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/data-douser/codeql-mrva-hepc
+    tag: "latest"
+    pullPolicy: Always
+  # Use local storage mode for Minikube (no GCS access)
+  command:
+    - "hepc-server"
+    - "--storage"
+    - "local"
+    - "--host"
+    - "0.0.0.0"
+    - "--port"
+    - "8070"
+    - "--db-dir"
+    - "/data"
+  # Enable persistence for local storage mode
+  persistence:
+    enabled: true
+    size: 1Gi
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+# =============================================================================
+# PostgreSQL - Smaller PVC for Minikube
+# =============================================================================
+postgres:
+  persistence:
+    size: 1Gi
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# =============================================================================
+# MinIO - Smaller PVC for Minikube
+# =============================================================================
+minio:
+  persistence:
+    size: 2Gi
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# =============================================================================
+# RabbitMQ - Smaller PVC for Minikube
+# =============================================================================
+rabbitmq:
+  persistence:
+    size: 1Gi
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# =============================================================================
+# Disable features not needed for local testing
+# =============================================================================
+ingress:
+  enabled: false
+
+networkPolicy:
+  enabled: false
+
+# ServiceAccount - don't need workload identity annotations locally
+serviceAccount:
+  create: true
+  annotations: {}
+  name: "mrva"

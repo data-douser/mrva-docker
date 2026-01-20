@@ -9,6 +9,10 @@ handoffs:
     agent: codeql-mrva-agent-skills-developer
     prompt: 'Create a new Agent Skill to capture lessons learned from recent #changes to this #codebase.'
     send: false # do not send automatically; wait for user confirmation
+  - label: Update an existing Agent Skill
+    agent: codeql-mrva-agent-skills-developer
+    prompt: 'Update an existing Agent Skill to reflect lessons learned from the current chat session, with awareness of recent #changes to this #codebase.'
+    send: false # do not send automatically; wait for user confirmation
 ---
 
 # `codeql-mrva-k8s-helm-chart-developer` Agent
