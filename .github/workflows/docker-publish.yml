@@ -307,7 +307,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Image | Status | Registry |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|----------|" >> $GITHUB_STEP_SUMMARY
-          
+
           MATRIX='${{ needs.prepare.outputs.matrix }}'
           for img in $(echo $MATRIX | jq -r '.[]'); do
             case $img in
@@ -319,7 +319,7 @@ jobs:
             esac
             echo "| $name | ${{ needs.build-and-push.result }} | ghcr.io/${{ github.repository_owner }}/$name |" >> $GITHUB_STEP_SUMMARY
           done
-          
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Pull Commands" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
