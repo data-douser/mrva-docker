@@ -1,10 +1,11 @@
 # ######################
 # Provide codeql and java
 # Binary built on host
+# NOTE: This image is linux/amd64 ONLY because CodeQL CLI does not provide ARM64 Linux binaries.
+# ARM64 Mac users can run this image via Docker's Rosetta 2 emulation.
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Build argument for CodeQL version, defaulting to the latest release
 ARG CODEQL_VERSION=latest
 
 # Install packages
@@ -14,8 +15,7 @@ RUN apt-get update && apt-get install --no-install-recommends --assume-yes \
     ca-certificates \
     default-jdk
 
-# If the version is 'latest', get the latest release version from GitHub, unzip
-# the bundle into /opt, and delete the archive
+# Download CodeQL CLI (linux64 only - no ARM64 Linux support from GitHub)
 RUN if [ "$CODEQL_VERSION" = "latest" ]; then \
     CODEQL_VERSION=$(curl -s https://api.github.com/repos/github/codeql-cli-binaries/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/'); \
     fi && \
@@ -37,7 +37,7 @@ ENV CODEQL_JAVA_HOME=/usr
 # Set the working directory inside the final image
 WORKDIR /app
 
-# Copy the host-built binary
+# Copy the gh-mrva binary (amd64 only)
 COPY gh-mrva /usr/local/bin/gh-mrva
 
 # Put CodeQL on the PATH

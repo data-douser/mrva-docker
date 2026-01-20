@@ -29,61 +29,47 @@ helm lint k8s/codeql-mrva-chart
 There are three deployment approaches depending on your image availability:
 
 | Approach | Use Case | Images Required |
-|----------|----------|-----------------|
-| [Published GHCR Images](#full-deployment-with-published-ghcr-images) | Production-like testing with real images | Public GHCR images |
-| [Local Test Images](#full-deployment-with-local-test-images) | Basic deployment validation | Built locally via script |
+| -------- | -------- | --------------- |
+| [Public GHCR Images](#recommended-deployment-with-public-ghcr-images) | **Recommended** - Production-like testing | None (pulls from GHCR) |
+| [Local Test Images](#deployment-with-local-test-images) | Offline testing or custom builds | Built locally via script |
 | [Infrastructure Only](#infrastructure-only-deployment-no-custom-images) | Database/messaging testing | None (uses public images) |
 
-### Full Deployment with Published GHCR Images
+### Recommended: Deployment with Public GHCR Images
 
-This is the recommended approach for testing production-like deployments. It uses container images published to GitHub Container Registry (GHCR).
+All custom container images are now **publicly available** on GitHub Container Registry (GHCR) and can be pulled without authentication.
 
-#### GHCR Image Requirements
-
-The chart uses these custom images from `ghcr.io/data-douser/`:
+#### GHCR Image Status
 
 | Image | Repository | Purpose | Public Status |
-|-------|------------|---------|---------------|
-| `ghcr.io/data-douser/codeql-mrva-server` | [mrva-docker](https://github.com/data-douser/mrva-docker) | MRVA coordination server | ❌ Not yet public |
-| `ghcr.io/data-douser/codeql-mrva-agent` | [mrva-docker](https://github.com/data-douser/mrva-docker) | CodeQL analysis agent | ❌ Not yet public |
+| ----- | ---------- | ------- | ------------- |
+| `ghcr.io/data-douser/codeql-mrva-server` | [mrva-docker](https://github.com/data-douser/mrva-docker) | MRVA coordination server | ✅ Public |
+| `ghcr.io/data-douser/codeql-mrva-agent` | [mrva-docker](https://github.com/data-douser/mrva-docker) | CodeQL analysis agent | ✅ Public |
 | `ghcr.io/data-douser/codeql-mrva-hepc` | [mrva-go-hepc](https://github.com/data-douser/mrva-go-hepc) | HTTP Endpoint Provider for CodeQL | ✅ Public |
-
-> **Current Status**: Only `codeql-mrva-hepc` is publicly accessible. For server and agent, use `minikube-values.yaml` with local test images until GHCR packages are made public.
-
-#### Ensure Images Are Public (No Auth Required)
-
-GHCR images default to **private** when first published. For anonymous pull access, each package must be made **public**:
-
-1. Navigate to the package page (e.g., `https://github.com/users/data-douser/packages/container/package/codeql-mrva-hepc`)
-2. Click **Package settings** (gear icon, lower right)
-3. Scroll to **Danger Zone** → Click **Change visibility**
-4. Select **Public** and confirm
-
-> **Note**: Public GHCR images allow anonymous access and can be pulled without authentication. See [GitHub Docs: Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
 #### Verify Public Image Access
 
 Test that images can be pulled without authentication:
 
 ```bash
-# Remove any cached credentials (optional, for clean test)
+# Remove any cached credentials (ensures clean test)
 docker logout ghcr.io
 
-# Test pulling each image
+# Test pulling each image - should work without auth
 docker pull ghcr.io/data-douser/codeql-mrva-server:latest
 docker pull ghcr.io/data-douser/codeql-mrva-agent:latest
 docker pull ghcr.io/data-douser/codeql-mrva-hepc:latest
 ```
 
-If you see `unauthorized` or `denied` errors, the package visibility is not set to public.
+If you see `unauthorized` or `denied` errors, see [GHCR Troubleshooting](#ghcr-image-troubleshooting).
 
-#### Deploy with Production Values
+#### Deploy with minikube-values.yaml (Recommended)
 
-Use `production-values.yaml` which configures the GHCR image repositories:
+Use `minikube-values.yaml` which is specifically configured for local Minikube testing:
 
 ```bash
 helm install mrva k8s/codeql-mrva-chart \
   -f k8s/codeql-mrva-chart/production-values.yaml \
+  -f k8s/codeql-mrva-chart/minikube-values.yaml \
   --namespace mrva-test \
   --create-namespace \
   --set postgres.auth.password=testpassword \
@@ -92,39 +78,40 @@ helm install mrva k8s/codeql-mrva-chart \
   --wait --timeout 5m
 ```
 
-> **Note**: Production values use `IfNotPresent` pull policy. For fresh pulls, add `--set global.imagePullPolicy=Always`.
+The `minikube-values.yaml` overlay provides:
 
-#### If Images Require Authentication
+| Configuration | Value | Purpose |
+| ------------- | ----- | ------- |
+| `global.imagePullSecrets` | `[]` (empty) | No auth needed for public GHCR images |
+| `global.imagePullPolicy` | `Always` | Ensure latest images are pulled |
+| `ingress.enabled` | `false` | No ingress controller needed locally |
+| `networkPolicy.enabled` | `false` | Simpler local networking |
+| Resource limits | Reduced | Fits constrained Minikube environments |
+| PVC sizes | Smaller (1-2Gi) | Saves local storage |
 
-If the GHCR images cannot be made public, create an imagePullSecret:
+#### Alternative: Deploy with production-values.yaml Only
+
+For production-like testing with larger resources:
 
 ```bash
-# Create GitHub PAT with read:packages scope
-# Then create the secret
-kubectl create namespace mrva-test
-
-kubectl create secret docker-registry ghcr-secret \
-  --namespace mrva-test \
-  --docker-server=ghcr.io \
-  --docker-username=YOUR_GITHUB_USERNAME \
-  --docker-password=YOUR_GITHUB_PAT \
-  --docker-email=your-email@example.com
-
-# Deploy with the secret reference (already configured in production-values.yaml)
 helm install mrva k8s/codeql-mrva-chart \
   -f k8s/codeql-mrva-chart/production-values.yaml \
   --namespace mrva-test \
+  --create-namespace \
+  --set global.imagePullSecrets=[] \
+  --set global.imagePullPolicy=Always \
+  --set ingress.enabled=false \
   --set postgres.auth.password=testpassword \
   --set minio.rootPassword=testpassword123 \
   --set rabbitmq.auth.password=testpassword \
   --wait --timeout 5m
 ```
 
-The `production-values.yaml` already includes `global.imagePullSecrets[0].name=ghcr-secret`.
+> **Note**: Override `imagePullSecrets=[]` since GHCR images are now public.
 
-### Full Deployment with Local Test Images
+### Deployment with Local Test Images
 
-The custom container images (mrva-server, mrva-agent, mrva-hepc-container) may not be available locally. Use the provided test image script to create minimal Flask-based containers that respond to health checks:
+For offline testing or when you want to use custom-built images instead of GHCR, use the provided test image script to create minimal Flask-based containers that respond to health checks:
 
 ```bash
 # Build test images and load into minikube
@@ -144,7 +131,7 @@ helm install mrva k8s/codeql-mrva-chart \
   --wait --timeout 5m
 ```
 
-### Full Deployment with Locally-Built Production Images
+### Deployment with Locally-Built Production Images
 
 If you've built production images locally:
 
@@ -243,7 +230,7 @@ kubectl port-forward -n mrva-test svc/mrva-codeql-mrva-chart-postgres 5432:5432
 When deploying with infrastructure-only (server/agent/hepc disabled):
 
 | Resource Type | Name | Expected Status |
-|---------------|------|-----------------|
+| ------------- | ---- | --------------- |
 | StatefulSet | mrva-codeql-mrva-chart-postgres | 1/1 Ready |
 | StatefulSet | mrva-codeql-mrva-chart-minio | 1/1 Ready |
 | Deployment | mrva-codeql-mrva-chart-rabbitmq | 1/1 Ready |
@@ -263,7 +250,7 @@ When deploying with infrastructure-only (server/agent/hepc disabled):
 When deploying with test images and test-values.yaml:
 
 | Resource Type | Name | Expected Status |
-|---------------|------|-----------------|
+| ------------- | ---- | --------------- |
 | Deployment | mrva-codeql-mrva-chart-server | 1/1 Ready |
 | Deployment | mrva-codeql-mrva-chart-agent | 1/1 Ready |
 | Deployment | mrva-codeql-mrva-chart-hepc | 1/1 Ready |
@@ -395,7 +382,7 @@ helm test mrva -n mrva-test
 The `scripts/create-test-images.sh` script creates minimal Flask-based containers for testing:
 
 | Image | Port | Description |
-|-------|------|-------------|
+| ----- | ---- | ----------- |
 | mrva-server:0.4.5 | 8080 | Flask app with `/health` endpoint |
 | mrva-agent:0.4.5 | 8071 | Flask app with `/health` endpoint + background worker thread |
 | mrva-hepc-container:0.4.5 | 8070 | Flask app with `/health` endpoint |
@@ -420,28 +407,45 @@ This consistent approach ensures:
 
 ## GHCR Image Troubleshooting
 
-### Check Package Visibility
+### Current Public Image Status
 
-To verify if a GHCR package is truly public:
+All custom MRVA images are now **publicly available** on GHCR:
 
 ```bash
-# This should work without any authentication
+# Verify public access (should work without authentication)
 docker logout ghcr.io
+docker pull ghcr.io/data-douser/codeql-mrva-server:latest
+docker pull ghcr.io/data-douser/codeql-mrva-agent:latest
 docker pull ghcr.io/data-douser/codeql-mrva-hepc:latest
 ```
-
-If it fails with `unauthorized`, the package is still private.
 
 ### Common GHCR Issues
 
 | Symptom | Cause | Solution |
-|---------|-------|----------|
+| ------- | ----- | -------- |
 | `denied: denied` | Package is private | Change visibility to Public in Package settings |
 | `unauthorized: authentication required` | Package not public | Make package public OR create imagePullSecret |
 | `manifest unknown` | Tag doesn't exist | Check available tags at package page |
 | `repository not found` | Wrong path or private | Verify repository and visibility |
 
-### Making GHCR Packages Public
+### GitHub Actions Workflow Considerations
+
+The `docker-publish.yml` workflow builds and publishes images to GHCR. Key configurations:
+
+| Setting | Value | Purpose |
+| ------- | ----- | ------- |
+| `permissions.packages` | `write` | Required at workflow level for GHCR push |
+| `provenance` | `false` | Avoids attestation permission issues |
+| `sbom` | `false` | Avoids attestation permission issues |
+| QEMU setup | Removed | Not needed for single-arch (amd64) builds |
+
+If you encounter `permission_denied: write_package` errors in CI:
+
+1. Ensure workflow has top-level `permissions: packages: write`
+2. Check repository Settings → Actions → General → Workflow permissions
+3. Verify the package allows workflow write access
+
+### Making GHCR Packages Public (If Needed)
 
 Packages published to GHCR default to **private**. To enable anonymous pulls:
 

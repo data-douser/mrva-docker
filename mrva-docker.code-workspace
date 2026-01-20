@@ -5,5 +5,8 @@
             "path": "."
         }
     ],
-	"settings": {}
+    "settings": {
+        "sarif-viewer.connectToGithubCodeScanning": "off",
+        "makefile.configureOnOpen": false
+    }
 }
