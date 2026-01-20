@@ -7,7 +7,7 @@ description: Agent skill for teaching Helm Chart development following best prac
 
 ## CHART STRUCTURE
 
-```
+```bash
 mychart/
   Chart.yaml          # Chart metadata (name, version, appVersion)
   values.yaml         # Default configuration values
@@ -22,7 +22,7 @@ mychart/
 ## BUILT-IN OBJECTS
 
 | Object | Description |
-|--------|-------------|
+| ------ | ----------- |
 | `.Release.Name` | Release name |
 | `.Release.Namespace` | Target namespace |
 | `.Release.IsInstall` | True if install operation |
@@ -39,6 +39,7 @@ mychart/
 ## VALUES
 
 Values come from multiple sources (in order of precedence):
+
 1. `--set` flags (highest)
 2. `-f` custom values file
 3. Parent chart's values.yaml (for subcharts)
@@ -51,6 +52,7 @@ Delete a default key: `--set key=null`
 ## TEMPLATE FUNCTIONS
 
 ### String Functions
+
 ```yaml
 {{ .Values.name | quote }}              # Quote string
 {{ .Values.name | upper }}              # Uppercase
@@ -62,18 +64,21 @@ Delete a default key: `--set key=null`
 ```
 
 ### Default Values
+
 ```yaml
 {{ .Values.foo | default "bar" }}       # Fallback value
 {{ .Values.foo | default (include "mychart.name" .) }}
 ```
 
 ### YAML Handling
+
 ```yaml
 {{ toYaml .Values.resources | nindent 2 }}   # Convert + indent
 {{ .Values.annotations | toYaml | indent 4 }}
 ```
 
 ### Logic Operators
+
 ```yaml
 {{ if eq .Values.type "server" }}
 {{ if ne .Values.env "prod" }}
@@ -85,6 +90,7 @@ Delete a default key: `--set key=null`
 ## CONTROL STRUCTURES
 
 ### Conditionals
+
 ```yaml
 {{- if .Values.ingress.enabled }}
 # Resource definition here
@@ -96,6 +102,7 @@ Delete a default key: `--set key=null`
 Pipeline evaluates as **false** if: boolean false, numeric zero, empty string, nil, empty collection.
 
 ### Scope with `with`
+
 ```yaml
 {{- with .Values.nodeSelector }}
 nodeSelector:
@@ -106,6 +113,7 @@ nodeSelector:
 Inside `with`, use `$` to access root: `{{ $.Release.Name }}`
 
 ### Loops with `range`
+
 ```yaml
 # List iteration
 {{- range .Values.hosts }}
@@ -126,6 +134,7 @@ Inside `with`, use `$` to access root: `{{ $.Release.Name }}`
 ## NAMED TEMPLATES
 
 Define in `_helpers.tpl`:
+
 ```yaml
 {{- define "mychart.labels" -}}
 app.kubernetes.io/name: {{ include "mychart.name" . }}
@@ -134,6 +143,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 ```
 
 Use with `include` (preferred over `template`):
+
 ```yaml
 metadata:
   labels:
@@ -143,13 +153,14 @@ metadata:
 **Why `include` over `template`?** `include` returns a string that can be piped to other functions like `nindent`.
 
 ### Naming Convention
+
 Prefix template names with chart name to avoid conflicts: `{{ define "mychart.fullname" }}`
 
 ## WHITESPACE CONTROL
 
 - `{{-` chomps whitespace **left**
 - `-}}` chomps whitespace **right**
-- Space required: `{{- ` not `{{-`
+- Space required: `{{-` not `{{-`
 
 ```yaml
 {{- if .Values.enabled }}
@@ -170,6 +181,7 @@ drink: {{ .drink }}
 ## SUBCHARTS AND GLOBALS
 
 Parent chart overrides subchart values via key matching subchart name:
+
 ```yaml
 # In parent values.yaml
 mysubchart:
@@ -177,6 +189,7 @@ mysubchart:
 ```
 
 Global values accessible everywhere:
+
 ```yaml
 global:
   imageRegistry: myregistry.com
@@ -187,7 +200,8 @@ global:
 ## NOTES.txt
 
 Create `templates/NOTES.txt` for post-install instructions:
-```
+
+```text
 Thank you for installing {{ .Chart.Name }}.
 Release: {{ .Release.Name }}
 
@@ -197,7 +211,7 @@ To verify: helm status {{ .Release.Name }}
 ## DEBUGGING
 
 | Command | Purpose |
-|---------|---------|
+| ------- | ------- |
 | `helm lint <chart>` | Validate best practices |
 | `helm template <name> <chart>` | Render locally |
 | `helm template <name> <chart> --debug` | Verbose render |
@@ -205,6 +219,7 @@ To verify: helm status {{ .Release.Name }}
 | `helm get manifest <release>` | View installed templates |
 
 Debug a value:
+
 ```yaml
 {{- printf "%#v" .Values | fail }}
 ```

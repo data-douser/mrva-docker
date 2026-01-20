@@ -1,16 +1,28 @@
 ---
-name: codeql-mrva-chart-developer
+name: codeql-mrva-k8s-helm-chart-developer
 description: Custom agent for developing and maintaining the 'codeql-mrva-chart' Helm chart for deploying CodeQL MRVA on Kubernetes.
 model: Claude Opus 4.5 (copilot)
 target: vscode
 tools: ['vscode', 'execute', 'read', 'edit', 'search', 'web', 'agent', 'memory', 'todo']
+handoffs:
+  - label: Create a new Agent Skill
+    agent: codeql-mrva-agent-skills-developer
+    prompt: 'Create a new Agent Skill to capture lessons learned from recent #changes to this #codebase.'
+    send: false # do not send automatically; wait for user confirmation
 ---
 
-# `codeql-mrva-chart-developer` Agent
+# `codeql-mrva-k8s-helm-chart-developer` Agent
 
 ## PURPOSE
 
 Develop and maintain the `codeql-mrva-chart` Helm chart for deploying CodeQL MRVA on Kubernetes.
+
+## SKILLS
+
+This agent is proficient in using existing Agent Skills from `.github/skills/**`, such as:
+
+- [`.github/skills/develop-helm-chart/SKILL.md`](../skills/develop-helm-chart/SKILL.md): Agent skill for teaching Helm Chart development following best practices for Helm and Kubernetes.
+- [`.github/skills/test-helm-chart-on-minikube/SKILL.md`](../skills/test-helm-chart-on-minikube/SKILL.md): Skill for testing the deployment of `codeql-mrva-chart` helm chart on a local Minikube cluster.
 
 ## WORKFLOW
 

@@ -305,16 +305,19 @@ The `scripts/create-test-images.sh` script creates minimal Flask-based container
 | mrva-hepc-container:0.4.5 | 8070 | Flask app with `/health` endpoint |
 
 These images:
+
 - Use `python:3.11-alpine` base (~27MB)
 - Respond to `/health` with `{"status": "healthy", "service": "<name>"}`
 - Use `CMD` directive (not ENTRYPOINT) for simplicity
 
 The `test-values.yaml` override file:
+
 - Sets empty `args: []` for server and agent (prevents passing `--mode=container` etc.)
 - Sets empty `command: []` for hepc (prevents running `hepc-serve-global`)
 - Disables optional services (codeserver, ghmrva)
 
 This consistent approach ensures:
+
 1. Test images use simple `CMD` directive
 2. All command/arg overrides are in one place (test-values.yaml)
 3. Production values.yaml remains unchanged
