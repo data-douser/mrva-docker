@@ -181,7 +181,8 @@ jobs:
           # Source repos import github.com/hohn/mrvacommander - replace with local checkout
           go mod edit -replace github.com/hohn/mrvacommander=../mrvacommander
           go mod tidy
-          CGO_ENABLED=0 GOOS=linux go build -o ../${{ matrix.context }}/${{ matrix.go_binary }} ./cmd/${{ matrix.go_binary }}
+          # main.go is at repo root, not in cmd/ subdirectory
+          CGO_ENABLED=0 GOOS=linux go build -o ../${{ matrix.context }}/${{ matrix.go_binary }} .
 
       # Submodule checkout (for hepc and ghmrva images)
       - name: Checkout submodule repository
