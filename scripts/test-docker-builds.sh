@@ -23,11 +23,20 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 IMAGES="${1:-all}"
 CREATE_STUBS="${CREATE_STUBS:-false}"
 
+# Determine host architecture for informational purposes
+HOST_ARCH=$(uname -m)
+echo "Host architecture: $HOST_ARCH"
+echo "NOTE: All images are linux/amd64 only (CodeQL CLI limitation)"
+echo "      ARM64 Macs can run these via Docker's Rosetta 2 emulation"
+echo ""
+
 usage() {
     echo "Usage: $0 [server|agent|hepc|ghmrva|all]"
     echo ""
     echo "Environment variables:"
     echo "  CREATE_STUBS=true  Create stub binaries for testing (default: false)"
+    echo ""
+    echo "NOTE: Images are linux/amd64 only because CodeQL CLI doesn't provide ARM64 Linux binaries."
     echo ""
     echo "Examples:"
     echo "  $0 server           # Build only server image"
@@ -51,7 +60,7 @@ EOF
 }
 
 build_server() {
-    log_info "Building server image..."
+    log_info "Building server image (linux/amd64)..."
     cd "$ROOT_DIR/containers/server"
     
     # Check if binary exists
@@ -67,12 +76,12 @@ build_server() {
         fi
     fi
     
-    docker build -t test-codeql-mrva-server:local .
+    docker build --platform linux/amd64 -t test-codeql-mrva-server:local .
     log_info "Server image built successfully"
 }
 
 build_agent() {
-    log_info "Building agent image..."
+    log_info "Building agent image (linux/amd64)..."
     cd "$ROOT_DIR/containers/agent"
     
     # Check if binary exists
@@ -88,7 +97,7 @@ build_agent() {
         fi
     fi
     
-    docker build -t test-codeql-mrva-agent:local .
+    docker build --platform linux/amd64 -t test-codeql-mrva-agent:local .
     log_info "Agent image built successfully"
 }
 
@@ -112,7 +121,7 @@ build_hepc() {
 }
 
 build_ghmrva() {
-    log_info "Building gh-mrva image..."
+    log_info "Building gh-mrva image (linux/amd64)..."
     cd "$ROOT_DIR/containers/ghmrva"
     
     # Check if binary exists
@@ -128,7 +137,7 @@ build_ghmrva() {
         fi
     fi
     
-    docker build -t test-codeql-mrva-ghmrva:local .
+    docker build --platform linux/amd64 -t test-codeql-mrva-ghmrva:local .
     log_info "gh-mrva image built successfully"
 }
 

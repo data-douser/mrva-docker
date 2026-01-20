@@ -8,7 +8,9 @@
 # - Disables network policies (simpler local testing)
 # - Reduces resource requests for constrained environments
 # - Smaller PVC sizes for local storage
-# - Uses test images for server/agent (not yet public on GHCR)
+#
+# NOTE: GHCR images are linux/amd64 ONLY because CodeQL CLI does not provide ARM64 Linux binaries.
+# ARM64 Mac users can run via Docker Desktop's Rosetta 2 emulation.
 
 # Global overrides for Minikube
 global:
@@ -18,17 +20,14 @@ global:
   imagePullPolicy: Always
 
 # =============================================================================
-# Server - Use test image until GHCR image is public
+# Server - Use public GHCR image (linux/amd64 only)
 # =============================================================================
 server:
   replicaCount: 1  # Single replica for local testing
   image:
-    # Use local test image until ghcr.io/data-douser/codeql-mrva-server is public
-    repository: mrva-server
-    tag: "0.4.5"
-    pullPolicy: Never  # Use local image
-  # Clear args for test image
-  args: []
+    repository: ghcr.io/data-douser/codeql-mrva-server
+    tag: "latest"
+    pullPolicy: Always
   resources:
     limits:
       cpu: 500m
@@ -38,17 +37,14 @@ server:
       memory: 128Mi
 
 # =============================================================================
-# Agent - Use test image until GHCR image is public
+# Agent - Use public GHCR image (linux/amd64 only)
 # =============================================================================
 agent:
   replicaCount: 1  # Single replica for local testing
   image:
-    # Use local test image until ghcr.io/data-douser/codeql-mrva-agent is public
-    repository: mrva-agent
-    tag: "0.4.5"
-    pullPolicy: Never  # Use local image
-  # Clear args for test image
-  args: []
+    repository: ghcr.io/data-douser/codeql-mrva-agent
+    tag: "latest"
+    pullPolicy: Always
   resources:
     limits:
       cpu: 1000m
@@ -58,7 +54,7 @@ agent:
       memory: 512Mi
 
 # =============================================================================
-# HEPC - Use real GHCR image (it's public!)
+# HEPC - Use public GHCR image (linux/amd64 only)
 # =============================================================================
 hepc:
   replicaCount: 1
