@@ -1,0 +1,64 @@
+{{/*
+Code Server Deployment
+*/}}
+{{- if .Values.codeServer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "codeql-mrva-chart.codeserver.fullname" . }}
+  labels:
+    {{- include "codeql-mrva-chart.codeserver.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "codeql-mrva-chart.codeserver.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.codeServer.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "codeql-mrva-chart.codeserver.labels" . | nindent 8 }}
+        {{- with .Values.codeServer.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "codeql-mrva-chart.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "codeql-mrva-chart.serviceAccountName" . }}
+      containers:
+        - name: code-server
+          image: "{{ .Values.codeServer.image.repository }}:{{ .Values.codeServer.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.codeServer.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.codeServer.service.port }}
+              protocol: TCP
+          env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "codeql-mrva-chart.secretName" . }}
+                  key: CODE_SERVER_PASSWORD
+          {{- with .Values.codeServer.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.codeServer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.codeServer.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.codeServer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

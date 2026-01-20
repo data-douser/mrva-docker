@@ -1,0 +1,24 @@
+{{/*
+PostgreSQL Service
+*/}}
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "codeql-mrva-chart.postgres.fullname" . }}
+  labels:
+    {{- include "codeql-mrva-chart.postgres.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.postgres.service.type }}
+  ports:
+    - port: {{ .Values.postgres.service.port }}
+      targetPort: postgres
+      protocol: TCP
+      name: postgres
+  selector:
+    {{- include "codeql-mrva-chart.postgres.selectorLabels" . | nindent 4 }}
+{{- end }}

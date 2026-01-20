@@ -1,0 +1,330 @@
+name: Build and Publish Docker Images
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [master, main]
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      images:
+        description: 'Images to build (comma-separated: server,agent,hepc,ghmrva,vscode or "all")'
+        required: false
+        default: 'all'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+  GO_VERSION: '1.23'
+
+jobs:
+  # ==========================================================================
+  # Determine which images to build
+  # ==========================================================================
+  prepare:
+    name: Prepare Build Matrix
+    runs-on: ubuntu-latest
+    # Only run if CI succeeded (for workflow_run) or if it's a tag/manual trigger
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch')
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      version: ${{ steps.version.outputs.version }}
+      commit: ${{ steps.version.outputs.commit }}
+      build_time: ${{ steps.version.outputs.build_time }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+          COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "commit=${COMMIT}" >> $GITHUB_OUTPUT
+          echo "build_time=${BUILD_TIME}" >> $GITHUB_OUTPUT
+
+      - name: Set build matrix
+        id: set-matrix
+        run: |
+          # For tag pushes or manual "all", build all images
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]] || \
+             [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.images }}" == "all" ]]; then
+            MATRIX='["server","agent","hepc","ghmrva"]'
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Parse comma-separated input
+            INPUT="${{ github.event.inputs.images }}"
+            MATRIX=$(echo "$INPUT" | tr ',' '\n' | jq -R . | jq -s -c .)
+          else
+            # For workflow_run, build all (CI already validated)
+            MATRIX='["server","agent","hepc","ghmrva"]'
+          fi
+          echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
+          echo "Building images: ${MATRIX}"
+
+  # ==========================================================================
+  # Build Go binaries for server and agent
+  # ==========================================================================
+  build-go-binaries:
+    name: Build Go Binaries
+    runs-on: ubuntu-latest
+    needs: prepare
+    outputs:
+      server_artifact: mrvaserver-binary
+      agent_artifact: mrvaagent-binary
+    steps:
+      - name: Checkout mrva-docker
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Checkout mrvaserver
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/mrvaserver
+          path: external/mrvaserver
+
+      - name: Checkout mrvaagent
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/mrvaagent
+          path: external/mrvaagent
+
+      - name: Checkout mrvacommander
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/mrvacommander
+          path: external/mrvacommander
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          check-latest: true
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build mrvaserver (linux/amd64)
+        working-directory: external/mrvaserver
+        run: |
+          go mod edit -replace github.com/hohn/mrvacommander=../mrvacommander
+          go mod tidy
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o mrvaserver-linux-amd64 .
+
+      - name: Build mrvaserver (linux/arm64)
+        working-directory: external/mrvaserver
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o mrvaserver-linux-arm64 .
+
+      - name: Build mrvaagent (linux/amd64)
+        working-directory: external/mrvaagent
+        run: |
+          go mod edit -replace github.com/hohn/mrvacommander=../mrvacommander
+          go mod tidy
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o mrvaagent-linux-amd64 .
+
+      - name: Build mrvaagent (linux/arm64)
+        working-directory: external/mrvaagent
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o mrvaagent-linux-arm64 .
+
+      - name: Upload server binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: mrvaserver-binary
+          path: |
+            external/mrvaserver/mrvaserver-linux-amd64
+            external/mrvaserver/mrvaserver-linux-arm64
+          retention-days: 1
+
+      - name: Upload agent binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: mrvaagent-binary
+          path: |
+            external/mrvaagent/mrvaagent-linux-amd64
+            external/mrvaagent/mrvaagent-linux-arm64
+          retention-days: 1
+
+  # ==========================================================================
+  # Build and push Docker images using matrix
+  # ==========================================================================
+  build-and-push:
+    name: Build ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    needs: [prepare, build-go-binaries]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: server
+            context: containers/server
+            image_name: codeql-mrva-server
+            needs_binary: true
+            binary_artifact: mrvaserver-binary
+            binary_name: mrvaserver
+          - image: agent
+            context: containers/agent
+            image_name: codeql-mrva-agent
+            needs_binary: true
+            binary_artifact: mrvaagent-binary
+            binary_name: mrvaagent
+          - image: hepc
+            context: containers/hepc
+            image_name: codeql-mrva-hepc
+            needs_binary: false
+            submodule_repo: ${{ github.repository_owner }}/mrva-go-hepc
+            submodule_path: mrva-go-hepc
+            use_submodule_dockerfile: true
+          - image: ghmrva
+            context: containers/ghmrva
+            image_name: codeql-mrva-ghmrva
+            needs_binary: false
+            submodule_repo: ${{ github.repository_owner }}/gh-mrva
+            submodule_path: gh-mrva
+
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Download Go binaries
+        if: matrix.needs_binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.binary_artifact }}
+          path: ${{ matrix.context }}
+
+      - name: Prepare binary for build
+        if: matrix.needs_binary
+        run: |
+          cd ${{ matrix.context }}
+          # Rename amd64 binary for Dockerfile COPY (single-arch for now)
+          if [ -f "${{ matrix.binary_name }}-linux-amd64" ]; then
+            mv "${{ matrix.binary_name }}-linux-amd64" "${{ matrix.binary_name }}"
+          fi
+          chmod +x ${{ matrix.binary_name }}
+          ls -la
+
+      - name: Checkout submodule repository
+        if: matrix.submodule_repo != ''
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ matrix.submodule_repo }}
+          path: ${{ matrix.context }}/${{ matrix.submodule_path }}
+
+      - name: Prepare HEPC build context
+        if: matrix.image == 'hepc'
+        run: |
+          # HEPC uses the mrva-go-hepc Dockerfile directly
+          ls -la ${{ matrix.context }}/${{ matrix.submodule_path }}/
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.use_submodule_dockerfile && format('{0}/{1}', matrix.context, matrix.submodule_path) || matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+            COMMIT=${{ needs.prepare.outputs.commit }}
+            BUILD_TIME=${{ needs.prepare.outputs.build_time }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare.outputs.commit }}
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.image }}.sarif'
+        continue-on-error: true
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results-${{ matrix.image }}.sarif'
+          category: 'trivy-${{ matrix.image }}'
+        continue-on-error: true
+
+  # ==========================================================================
+  # Build Summary
+  # ==========================================================================
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [prepare, build-and-push]
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "## Docker Image Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ needs.prepare.outputs.commit }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Time:** ${{ needs.prepare.outputs.build_time }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Published Images" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Status | Registry |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+
+          MATRIX='${{ needs.prepare.outputs.matrix }}'
+          for img in $(echo $MATRIX | jq -r '.[]'); do
+            case $img in
+              server) name="codeql-mrva-server" ;;
+              agent) name="codeql-mrva-agent" ;;
+              hepc) name="codeql-mrva-hepc" ;;
+              ghmrva) name="codeql-mrva-ghmrva" ;;
+              *) name="$img" ;;
+            esac
+            echo "| $name | ${{ needs.build-and-push.result }} | ghcr.io/${{ github.repository_owner }}/$name |" >> $GITHUB_STEP_SUMMARY
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pull Commands" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ghcr.io/${{ github.repository_owner }}/codeql-mrva-server:latest" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ghcr.io/${{ github.repository_owner }}/codeql-mrva-agent:latest" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ghcr.io/${{ github.repository_owner }}/codeql-mrva-hepc:latest" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

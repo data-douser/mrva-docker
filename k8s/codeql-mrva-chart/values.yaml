@@ -1,0 +1,501 @@
+# Default values for codeql-mrva-chart.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# -- Override the chart name
+nameOverride: ""
+# -- Override the full name of resources
+fullnameOverride: ""
+
+# -- Global settings applied to all components
+global:
+  # -- Kubernetes namespace for all resources (used in NOTES.txt; actual namespace comes from helm install -n)
+  namespace: ""
+  # -- Common annotations applied to all resources
+  annotations: {}
+  # -- Common labels applied to all resources
+  labels: {}
+  # -- Image pull secrets for private registries
+  imagePullSecrets: []
+  # -- Default image pull policy for all containers
+  imagePullPolicy: IfNotPresent
+
+# =============================================================================
+# MRVA Server Configuration
+# =============================================================================
+server:
+  # -- Enable the MRVA server deployment
+  enabled: true
+  # -- Number of server replicas
+  replicaCount: 1
+  image:
+    # -- Server container image repository
+    repository: codeql-mrva-server
+    # -- Server container image tag (defaults to Chart.appVersion)
+    tag: ""
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+  # -- Command arguments for the server
+  args:
+    - "--mode=container"
+    - "--loglevel=debug"
+  service:
+    # -- Service type (ClusterIP, NodePort, LoadBalancer)
+    type: ClusterIP
+    # -- Server HTTP port
+    port: 8080
+  # -- Resource requests and limits
+  resources: {}
+  #   limits:
+  #     cpu: 500m
+  #     memory: 512Mi
+  #   requests:
+  #     cpu: 100m
+  #     memory: 128Mi
+  # -- Node selector for pod assignment
+  nodeSelector: {}
+  # -- Tolerations for pod assignment
+  tolerations: []
+  # -- Affinity rules for pod assignment
+  affinity: {}
+  # -- Pod annotations
+  podAnnotations: {}
+  # -- Pod labels
+  podLabels: {}
+  # -- Security context for the pod
+  podSecurityContext: {}
+  # -- Security context for the container
+  securityContext: {}
+  # -- Readiness probe configuration
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  # -- Liveness probe configuration
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 20
+
+# =============================================================================
+# MRVA Agent Configuration
+# =============================================================================
+agent:
+  # -- Enable the MRVA agent deployment
+  enabled: true
+  # -- Number of agent replicas
+  replicaCount: 1
+  image:
+    # -- Agent container image repository
+    repository: codeql-mrva-agent
+    # -- Agent container image tag (defaults to Chart.appVersion)
+    tag: ""
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+  # -- Command arguments for the agent
+  args:
+    - "--loglevel=debug"
+  service:
+    # -- Service type (ClusterIP, NodePort, LoadBalancer)
+    type: ClusterIP
+    # -- Agent port (if applicable)
+    port: 8071
+  # -- Resource requests and limits
+  resources: {}
+  # -- Node selector for pod assignment
+  nodeSelector: {}
+  # -- Tolerations for pod assignment
+  tolerations: []
+  # -- Affinity rules for pod assignment
+  affinity: {}
+  # -- Pod annotations
+  podAnnotations: {}
+  # -- Pod labels
+  podLabels: {}
+  # -- Security context for the pod
+  podSecurityContext: {}
+  # -- Security context for the container
+  securityContext: {}
+
+# =============================================================================
+# HEPC (HTTP Endpoint Provider for CodeQL) Configuration
+# Supports both Python (mrva-hepc-container) and Go (mrva-go-hepc) implementations
+# =============================================================================
+hepc:
+  # -- Enable the HEPC service (can be disabled if using external HEPC)
+  enabled: true
+  # -- Number of HEPC replicas
+  replicaCount: 1
+  image:
+    # -- HEPC container image repository
+    # For Python: codeql-mrva-hepc-python (legacy)
+    # For Go: ghcr.io/<owner>/codeql-mrva-hepc
+    repository: codeql-mrva-hepc
+    # -- HEPC container image tag (defaults to Chart.appVersion)
+    tag: ""
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+  # -- Command for HEPC container
+  # For Python: ["hepc-serve-global", "--host", "0.0.0.0", "--port", "8070"]
+  # For Go with local storage: ["hepc-server", "--storage", "local", "--host", "0.0.0.0", "--port", "8070", "--db-dir", "/data"]
+  # For Go with GCS: ["hepc-server", "--storage", "gcs", "--host", "0.0.0.0", "--port", "8070"]
+  command:
+    - "hepc-server"
+    - "--storage"
+    - "local"
+    - "--host"
+    - "0.0.0.0"
+    - "--port"
+    - "8070"
+    - "--db-dir"
+    - "/data"
+  service:
+    # -- Service type (ClusterIP, NodePort, LoadBalancer)
+    type: ClusterIP
+    # -- HEPC port
+    port: 8070
+  # -- Cache duration in seconds (0 disables caching)
+  cacheDuration: "60"
+  # -- Values volume mount path (for metadata.sql - Python only)
+  valuesPath: "/mrva/values"
+  # -- Storage configuration for Go HEPC
+  storage:
+    # -- Storage type: "local" or "gcs"
+    type: "local"
+    # -- Local storage: path to database directory
+    localPath: "/data"
+    # -- GCS storage configuration
+    gcs:
+      # -- GCS bucket name (required for gcs storage)
+      bucket: ""
+      # -- GCS object prefix (optional)
+      prefix: ""
+      # -- Path to GCS credentials file (optional, uses ADC if not set)
+      credentialsSecret: ""
+      credentialsKey: "credentials.json"
+  # -- Resource requests and limits
+  resources: {}
+  # -- Node selector for pod assignment
+  nodeSelector: {}
+  # -- Tolerations for pod assignment
+  tolerations: []
+  # -- Affinity rules for pod assignment
+  affinity: {}
+  # -- Pod annotations
+  podAnnotations: {}
+  # -- Pod labels
+  podLabels: {}
+  # -- Security context for the pod
+  podSecurityContext: {}
+  # -- Security context for the container
+  securityContext: {}
+  # -- External HEPC endpoint (used when hepc.enabled=false)
+  externalEndpoint: ""
+  # -- Persistence for local storage
+  persistence:
+    # -- Enable persistent storage for database files
+    enabled: false
+    # -- Storage class (empty uses default)
+    storageClass: ""
+    # -- Access mode
+    accessMode: ReadWriteOnce
+    # -- Storage size
+    size: 50Gi
+    # -- Existing PVC to use (optional)
+    existingClaim: ""
+
+# =============================================================================
+# PostgreSQL Configuration
+# =============================================================================
+postgres:
+  # -- Enable PostgreSQL StatefulSet (disable if using external database)
+  enabled: true
+  image:
+    # -- PostgreSQL image repository
+    repository: postgres
+    # -- PostgreSQL image tag
+    tag: "15"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+  # -- Database credentials
+  auth:
+    # -- PostgreSQL username
+    username: "mrva"
+    # -- PostgreSQL password (should be overridden in production)
+    password: "mrvapg"
+    # -- PostgreSQL database name
+    database: "mrvadb"
+  service:
+    # -- Service type
+    type: ClusterIP
+    # -- PostgreSQL port
+    port: 5432
+  persistence:
+    # -- Enable persistent storage
+    enabled: true
+    # -- Storage class (empty uses default)
+    storageClass: ""
+    # -- Access mode
+    accessMode: ReadWriteOnce
+    # -- Storage size
+    size: 10Gi
+  # -- Resource requests and limits
+  resources: {}
+  # -- Node selector for pod assignment
+  nodeSelector: {}
+  # -- Tolerations for pod assignment
+  tolerations: []
+  # -- Affinity rules for pod assignment
+  affinity: {}
+  # -- Pod annotations
+  podAnnotations: {}
+  # -- Pod labels
+  podLabels: {}
+  # -- External PostgreSQL configuration (used when postgres.enabled=false)
+  external:
+    # -- External PostgreSQL host
+    host: ""
+    # -- External PostgreSQL port
+    port: 5432
+
+# =============================================================================
+# MinIO (mrvastore) Configuration
+# =============================================================================
+minio:
+  # -- Enable MinIO StatefulSet
+  enabled: true
+  image:
+    # -- MinIO image repository
+    repository: minio/minio
+    # -- MinIO image tag
+    tag: "RELEASE.2024-06-11T03-13-30Z"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+  # -- MinIO root user
+  rootUser: "user"
+  # -- MinIO root password (should be overridden in production)
+  rootPassword: "mmusty8432"
+  # -- MinIO bucket name
+  bucketName: "mrvabucket"
+  # -- Use virtual host style addressing (0=path style, 1=virtual host)
+  virtualHostStyle: "0"
+  service:
+    # -- Service type
+    type: ClusterIP
+    # -- MinIO API port
+    port: 9000
+    # -- MinIO console port
+    consolePort: 9001
+  persistence:
+    # -- Enable persistent storage
+    enabled: true
+    # -- Storage class (empty uses default)
+    storageClass: ""
+    # -- Access mode
+    accessMode: ReadWriteOnce
+    # -- Storage size
+    size: 20Gi
+  # -- Resource requests and limits
+  resources: {}
+  # -- Node selector for pod assignment
+  nodeSelector: {}
+  # -- Tolerations for pod assignment
+  tolerations: []
+  # -- Affinity rules for pod assignment
+  affinity: {}
+  # -- Pod annotations
+  podAnnotations: {}
+  # -- Pod labels
+  podLabels: {}
+  # -- Enable init job to create bucket
+  initJob:
+    enabled: true
+    image:
+      repository: minio/mc
+      tag: "latest"
+      pullPolicy: IfNotPresent
+
+# =============================================================================
+# RabbitMQ Configuration
+# =============================================================================
+rabbitmq:
+  # -- Enable RabbitMQ Deployment
+  enabled: true
+  image:
+    # -- RabbitMQ image repository
+    repository: rabbitmq
+    # -- RabbitMQ image tag
+    tag: "3.13.7-management"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+  # -- RabbitMQ credentials
+  auth:
+    # -- RabbitMQ username
+    username: "user"
+    # -- RabbitMQ password (should be overridden in production)
+    password: "password"
+  service:
+    # -- Service type
+    type: ClusterIP
+    # -- AMQP port
+    port: 5672
+    # -- Management UI port
+    managementPort: 15672
+  persistence:
+    # -- Enable persistent storage
+    enabled: true
+    # -- Storage class (empty uses default)
+    storageClass: ""
+    # -- Access mode
+    accessMode: ReadWriteOnce
+    # -- Storage size
+    size: 5Gi
+  # -- Resource requests and limits
+  resources: {}
+  # -- Node selector for pod assignment
+  nodeSelector: {}
+  # -- Tolerations for pod assignment
+  tolerations: []
+  # -- Affinity rules for pod assignment
+  affinity: {}
+  # -- Pod annotations
+  podAnnotations: {}
+  # -- Pod labels
+  podLabels: {}
+  # -- Healthcheck configuration
+  healthcheck:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 30
+    failureThreshold: 10
+
+# =============================================================================
+# Code Server (VS Code) Configuration
+# =============================================================================
+codeServer:
+  # -- Enable code-server deployment
+  enabled: false
+  image:
+    # -- Code-server image repository
+    repository: codeql-mrva-vscode
+    # -- Code-server image tag (defaults to Chart.appVersion)
+    tag: ""
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+  # -- Password for code-server UI
+  password: "mrva"
+  service:
+    # -- Service type
+    type: ClusterIP
+    # -- Code-server port
+    port: 9080
+  # -- Resource requests and limits
+  resources: {}
+  # -- Node selector for pod assignment
+  nodeSelector: {}
+  # -- Tolerations for pod assignment
+  tolerations: []
+  # -- Affinity rules for pod assignment
+  affinity: {}
+  # -- Pod annotations
+  podAnnotations: {}
+  # -- Pod labels
+  podLabels: {}
+
+# =============================================================================
+# gh-mrva Client Configuration
+# =============================================================================
+ghmrva:
+  # -- Enable gh-mrva client deployment
+  enabled: false
+  image:
+    # -- gh-mrva image repository
+    repository: codeql-mrva-ghmrva
+    # -- gh-mrva image tag (defaults to Chart.appVersion)
+    tag: ""
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+  # -- Resource requests and limits
+  resources: {}
+  # -- Node selector for pod assignment
+  nodeSelector: {}
+  # -- Tolerations for pod assignment
+  tolerations: []
+  # -- Affinity rules for pod assignment
+  affinity: {}
+  # -- Pod annotations
+  podAnnotations: {}
+  # -- Pod labels
+  podLabels: {}
+
+# =============================================================================
+# Service Account Configuration
+# =============================================================================
+serviceAccount:
+  # -- Specifies whether a service account should be created
+  create: true
+  # -- Automatically mount a ServiceAccount's API credentials
+  automount: true
+  # -- Annotations to add to the service account
+  annotations: {}
+  # -- The name of the service account to use (generated if not set)
+  name: ""
+
+# =============================================================================
+# Ingress Configuration
+# =============================================================================
+ingress:
+  # -- Enable ingress for external access
+  enabled: false
+  # -- Ingress class name
+  className: ""
+  # -- Ingress annotations
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+    # nginx.ingress.kubernetes.io/proxy-body-size: "0"
+  hosts:
+    - host: mrva.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: server
+  # -- TLS configuration
+  tls: []
+  #  - secretName: mrva-tls
+  #    hosts:
+  #      - mrva.local
+
+# =============================================================================
+# HTTPRoute Configuration (Gateway API)
+# =============================================================================
+httpRoute:
+  # -- Enable HTTPRoute for Gateway API
+  enabled: false
+  # -- HTTPRoute annotations
+  annotations: {}
+  # -- Parent gateway references
+  parentRefs:
+    - name: gateway
+      sectionName: http
+  # -- Hostnames for routing
+  hostnames:
+    - mrva.local
+  # -- Routing rules
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+
+# =============================================================================
+# Network Policies
+# =============================================================================
+networkPolicy:
+  # -- Enable network policies
+  enabled: false

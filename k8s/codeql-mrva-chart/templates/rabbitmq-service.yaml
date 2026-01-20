@@ -1,0 +1,28 @@
+{{/*
+RabbitMQ Service
+*/}}
+{{- if .Values.rabbitmq.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "codeql-mrva-chart.rabbitmq.fullname" . }}
+  labels:
+    {{- include "codeql-mrva-chart.rabbitmq.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.rabbitmq.service.type }}
+  ports:
+    - port: {{ .Values.rabbitmq.service.port }}
+      targetPort: amqp
+      protocol: TCP
+      name: amqp
+    - port: {{ .Values.rabbitmq.service.managementPort }}
+      targetPort: management
+      protocol: TCP
+      name: management
+  selector:
+    {{- include "codeql-mrva-chart.rabbitmq.selectorLabels" . | nindent 4 }}
+{{- end }}

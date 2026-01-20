@@ -1,0 +1,127 @@
+================================================================================
+ CodeQL MRVA Chart - Deployment Summary
+================================================================================
+
+Thank you for installing {{ .Chart.Name }} version {{ .Chart.Version }}!
+
+Release Name: {{ .Release.Name }}
+Namespace:    {{ .Release.Namespace }}
+App Version:  {{ .Chart.AppVersion }}
+
+================================================================================
+ DEPLOYED COMPONENTS
+================================================================================
+
+{{- if .Values.server.enabled }}
+✓ MRVA Server
+  Service: {{ include "codeql-mrva-chart.server.fullname" . }}:{{ .Values.server.service.port }}
+{{- end }}
+
+{{- if .Values.agent.enabled }}
+✓ MRVA Agent
+  Service: {{ include "codeql-mrva-chart.agent.fullname" . }}:{{ .Values.agent.service.port }}
+{{- end }}
+
+{{- if .Values.hepc.enabled }}
+✓ HEPC
+  Service: {{ include "codeql-mrva-chart.hepc.fullname" . }}:{{ .Values.hepc.service.port }}
+{{- else }}
+○ HEPC (disabled - using external: {{ .Values.hepc.externalEndpoint }})
+{{- end }}
+
+{{- if .Values.postgres.enabled }}
+✓ PostgreSQL
+  Service: {{ include "codeql-mrva-chart.postgres.fullname" . }}:{{ .Values.postgres.service.port }}
+  Database: {{ .Values.postgres.auth.database }}
+{{- else }}
+○ PostgreSQL (disabled - using external: {{ .Values.postgres.external.host }}:{{ .Values.postgres.external.port }})
+{{- end }}
+
+{{- if .Values.minio.enabled }}
+✓ MinIO (mrvastore)
+  API:     {{ include "codeql-mrva-chart.minio.fullname" . }}:{{ .Values.minio.service.port }}
+  Console: {{ include "codeql-mrva-chart.minio.fullname" . }}:{{ .Values.minio.service.consolePort }}
+  Bucket:  {{ .Values.minio.bucketName }}
+{{- end }}
+
+{{- if .Values.rabbitmq.enabled }}
+✓ RabbitMQ
+  AMQP:       {{ include "codeql-mrva-chart.rabbitmq.fullname" . }}:{{ .Values.rabbitmq.service.port }}
+  Management: {{ include "codeql-mrva-chart.rabbitmq.fullname" . }}:{{ .Values.rabbitmq.service.managementPort }}
+{{- end }}
+
+{{- if .Values.codeServer.enabled }}
+✓ Code Server (VS Code)
+  Service: {{ include "codeql-mrva-chart.codeserver.fullname" . }}:{{ .Values.codeServer.service.port }}
+{{- end }}
+
+{{- if .Values.ghmrva.enabled }}
+✓ gh-mrva Client
+{{- end }}
+
+================================================================================
+ ACCESS THE MRVA SERVER
+================================================================================
+
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+
+{{- else if contains "NodePort" .Values.server.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "codeql-mrva-chart.server.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo "MRVA Server: http://$NODE_IP:$NODE_PORT"
+
+{{- else if contains "LoadBalancer" .Values.server.service.type }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+  kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "codeql-mrva-chart.server.fullname" . }}
+
+{{- else }}
+  # Port-forward to access the MRVA Server locally:
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "codeql-mrva-chart.server.fullname" . }} {{ .Values.server.service.port }}:{{ .Values.server.service.port }}
+
+  # Then access the server at: http://localhost:{{ .Values.server.service.port }}
+{{- end }}
+
+================================================================================
+ USEFUL COMMANDS
+================================================================================
+
+# View all pods in this release:
+kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/instance={{ .Release.Name }}"
+
+# View all services:
+kubectl get svc --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/instance={{ .Release.Name }}"
+
+# Check pod logs:
+kubectl logs --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/component=server" -f
+kubectl logs --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/component=agent" -f
+
+# Access MinIO console (port-forward):
+{{- if .Values.minio.enabled }}
+kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "codeql-mrva-chart.minio.fullname" . }} {{ .Values.minio.service.consolePort }}:{{ .Values.minio.service.consolePort }}
+# Then open: http://localhost:{{ .Values.minio.service.consolePort }}
+# Credentials: {{ .Values.minio.rootUser }} / <MINIO_ROOT_PASSWORD from values>
+{{- end }}
+
+# Access RabbitMQ management console (port-forward):
+{{- if .Values.rabbitmq.enabled }}
+kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "codeql-mrva-chart.rabbitmq.fullname" . }} {{ .Values.rabbitmq.service.managementPort }}:{{ .Values.rabbitmq.service.managementPort }}
+# Then open: http://localhost:{{ .Values.rabbitmq.service.managementPort }}
+# Credentials: {{ .Values.rabbitmq.auth.username }} / <RABBITMQ_PASSWORD from values>
+{{- end }}
+
+================================================================================
+ UPGRADE / UNINSTALL
+================================================================================
+
+# Upgrade the release:
+helm upgrade {{ .Release.Name }} <chart-path> --namespace {{ .Release.Namespace }}
+
+# Uninstall the release:
+helm uninstall {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+
+================================================================================

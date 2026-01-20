@@ -1,0 +1,24 @@
+{{/*
+RabbitMQ PersistentVolumeClaim
+*/}}
+{{- if and .Values.rabbitmq.enabled .Values.rabbitmq.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "codeql-mrva-chart.rabbitmq.fullname" . }}-data
+  labels:
+    {{- include "codeql-mrva-chart.rabbitmq.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.rabbitmq.persistence.accessMode }}
+  {{- if .Values.rabbitmq.persistence.storageClass }}
+  storageClassName: {{ .Values.rabbitmq.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.rabbitmq.persistence.size }}
+{{- end }}

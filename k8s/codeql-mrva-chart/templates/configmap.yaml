@@ -1,0 +1,37 @@
+{{/*
+ConfigMap containing non-sensitive configuration for all MRVA components.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "codeql-mrva-chart.configmapName" . }}
+  labels:
+    {{- include "codeql-mrva-chart.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  # PostgreSQL configuration
+  POSTGRES_USER: {{ .Values.postgres.auth.username | quote }}
+  POSTGRES_DB: {{ .Values.postgres.auth.database | quote }}
+  POSTGRES_HOST: {{ include "codeql-mrva-chart.postgres.host" . | quote }}
+  POSTGRES_PORT: {{ include "codeql-mrva-chart.postgres.port" . | quote }}
+
+  # RabbitMQ configuration
+  RABBITMQ_HOST: {{ include "codeql-mrva-chart.rabbitmq.host" . | quote }}
+  RABBITMQ_USER: {{ .Values.rabbitmq.auth.username | quote }}
+  RABBITMQ_PORT: {{ .Values.rabbitmq.service.port | quote }}
+
+  # MinIO configuration
+  MINIO_ROOT_USER: {{ .Values.minio.rootUser | quote }}
+  MINIO_ENDPOINT: {{ include "codeql-mrva-chart.minio.endpoint" . | quote }}
+  MRVA_MINIO_VIRTUAL_HOST: {{ .Values.minio.virtualHostStyle | quote }}
+
+  # HEPC configuration
+  MRVA_HEPC_ENDPOINT: {{ include "codeql-mrva-chart.hepc.endpoint" . | quote }}
+  MRVA_HEPC_CACHE_DURATION: {{ .Values.hepc.cacheDuration | quote }}
+
+  # Server configuration
+  SERVER_HOST: {{ include "codeql-mrva-chart.server.host" . | quote }}
+  SERVER_PORT: {{ .Values.server.service.port | quote }}

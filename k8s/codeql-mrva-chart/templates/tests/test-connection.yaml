@@ -1,0 +1,17 @@
+{{- if .Values.server.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "codeql-mrva-chart.fullname" . }}-test-connection"
+  labels:
+    {{- include "codeql-mrva-chart.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['{{ include "codeql-mrva-chart.server.fullname" . }}:{{ .Values.server.service.port }}/health']
+  restartPolicy: Never
+{{- end }}

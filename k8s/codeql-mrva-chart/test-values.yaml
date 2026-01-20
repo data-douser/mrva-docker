@@ -1,0 +1,36 @@
+# test-values.yaml
+# Values override file for testing with minimal Flask-based test images.
+# These test images don't have the real application binaries - they are simple
+# Python Flask apps that respond to health checks.
+#
+# Usage:
+#   helm install mrva ./k8s/codeql-mrva-chart -f ./k8s/codeql-mrva-chart/test-values.yaml
+#
+# This file overrides commands/args that would fail with test images.
+
+# ------------------------------------------------------------------------------
+# Server - disable args that test image doesn't understand
+# ------------------------------------------------------------------------------
+server:
+  args: []
+
+# ------------------------------------------------------------------------------
+# Agent - disable args that test image doesn't understand
+# ------------------------------------------------------------------------------
+agent:
+  args: []
+
+# ------------------------------------------------------------------------------
+# HEPC - disable command that test image doesn't have
+# ------------------------------------------------------------------------------
+hepc:
+  command: []
+
+# ------------------------------------------------------------------------------
+# Optional services - disable for basic deployment testing
+# ------------------------------------------------------------------------------
+codeserver:
+  enabled: false
+
+ghmrva:
+  enabled: false

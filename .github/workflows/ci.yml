@@ -1,0 +1,237 @@
+# CI workflow for mrva-docker
+# Validates container builds and runs linting/testing before docker-publish
+name: CI
+
+on:
+  push:
+    branches: [master, main, develop]
+    paths:
+      - 'containers/**'
+      - 'k8s/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches: [master, main]
+    paths:
+      - 'containers/**'
+      - 'k8s/**'
+      - '.github/workflows/ci.yml'
+
+permissions:
+  contents: read
+
+env:
+  # Go version for building mrvaserver/mrvaagent
+  GO_VERSION: '1.23'
+
+jobs:
+  # ==========================================================================
+  # Detect which images need building based on changed files
+  # ==========================================================================
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      agent: ${{ steps.filter.outputs.agent }}
+      hepc: ${{ steps.filter.outputs.hepc }}
+      ghmrva: ${{ steps.filter.outputs.ghmrva }}
+      vscode: ${{ steps.filter.outputs.vscode }}
+      helm: ${{ steps.filter.outputs.helm }}
+      any_image: ${{ steps.filter.outputs.any_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: filter
+        run: |
+          # For PRs, compare against base branch; for pushes, compare against previous commit
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+            # Handle first push to branch
+            if [ "$BASE_SHA" == "0000000000000000000000000000000000000000" ]; then
+              BASE_SHA=$(git rev-parse HEAD~1 2>/dev/null || echo "")
+            fi
+          fi
+
+          # If no base SHA, assume all changed
+          if [ -z "$BASE_SHA" ]; then
+            echo "server=true" >> $GITHUB_OUTPUT
+            echo "agent=true" >> $GITHUB_OUTPUT
+            echo "hepc=true" >> $GITHUB_OUTPUT
+            echo "ghmrva=true" >> $GITHUB_OUTPUT
+            echo "vscode=true" >> $GITHUB_OUTPUT
+            echo "helm=true" >> $GITHUB_OUTPUT
+            echo "any_image=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          CHANGED_FILES=$(git diff --name-only $BASE_SHA HEAD 2>/dev/null || echo "")
+
+          # Check each component
+          echo "server=$(echo "$CHANGED_FILES" | grep -q '^containers/server/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "agent=$(echo "$CHANGED_FILES" | grep -q '^containers/agent/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "hepc=$(echo "$CHANGED_FILES" | grep -q '^containers/hepc/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "ghmrva=$(echo "$CHANGED_FILES" | grep -q '^containers/ghmrva/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "vscode=$(echo "$CHANGED_FILES" | grep -q '^containers/vscode/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "helm=$(echo "$CHANGED_FILES" | grep -q '^k8s/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+          # Check if any image changed
+          if echo "$CHANGED_FILES" | grep -q '^containers/'; then
+            echo "any_image=true" >> $GITHUB_OUTPUT
+          else
+            echo "any_image=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ==========================================================================
+  # Helm Chart Linting
+  # ==========================================================================
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.helm == 'true' || github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Lint Helm chart
+        run: helm lint k8s/codeql-mrva-chart
+
+      - name: Template validation (dry-run)
+        run: |
+          helm template mrva k8s/codeql-mrva-chart \
+            --set postgres.auth.password=testpass \
+            --set minio.rootPassword=testpass123 \
+            --set rabbitmq.auth.password=testpass \
+            > /dev/null
+          echo "Template rendering successful"
+
+  # ==========================================================================
+  # Docker Build Tests (no push) - Matrix strategy
+  # ==========================================================================
+  docker-build-test:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    # Run if any image changed, or always on push to main branch
+    if: needs.detect-changes.outputs.any_image == 'true' || github.ref == 'refs/heads/master'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: server
+            context: containers/server
+            go_repo: ${{ github.repository_owner }}/mrvaserver
+            go_binary: mrvaserver
+          - image: agent
+            context: containers/agent
+            go_repo: ${{ github.repository_owner }}/mrvaagent
+            go_binary: mrvaagent
+          - image: hepc
+            context: containers/hepc
+            submodule_repo: ${{ github.repository_owner }}/mrva-go-hepc
+            submodule_path: mrva-go-hepc
+            use_submodule_dockerfile: true
+          - image: ghmrva
+            context: containers/ghmrva
+            submodule_repo: ${{ github.repository_owner }}/gh-mrva
+            submodule_path: gh-mrva
+            use_submodule_dockerfile: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # Go binary build steps (for server and agent images)
+      - name: Checkout Go source repository
+        if: matrix.go_repo != ''
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ matrix.go_repo }}
+          path: go-src
+
+      - name: Checkout mrvacommander (shared dependency)
+        if: matrix.go_repo != ''
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/mrvacommander
+          path: mrvacommander
+
+      - name: Set up Go
+        if: matrix.go_repo != ''
+        uses: actions/setup-go@v6
+        with:
+          check-latest: true
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build Go binary
+        if: matrix.go_repo != ''
+        working-directory: go-src
+        run: |
+          # Source repos import github.com/hohn/mrvacommander - replace with local checkout
+          go mod edit -replace github.com/hohn/mrvacommander=../mrvacommander
+          go mod tidy
+          # main.go is at repo root, not in cmd/ subdirectory
+          CGO_ENABLED=0 GOOS=linux go build -o ../${{ matrix.context }}/${{ matrix.go_binary }} .
+
+      # Submodule checkout (for hepc and ghmrva images)
+      - name: Checkout submodule repository
+        if: matrix.submodule_repo != ''
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ matrix.submodule_repo }}
+          path: ${{ matrix.context }}/${{ matrix.submodule_path }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (test only, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.use_submodule_dockerfile && format('{0}/{1}', matrix.context, matrix.submodule_path) || matrix.context }}
+          push: false
+          tags: test-${{ matrix.image }}:ci
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # ==========================================================================
+  # Summary
+  # ==========================================================================
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [detect-changes, helm-lint, docker-build-test]
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Helm Lint | ${{ needs.helm-lint.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build Test | ${{ needs.docker-build-test.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Changed Components" >> $GITHUB_STEP_SUMMARY
+          echo "- Server: ${{ needs.detect-changes.outputs.server }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Agent: ${{ needs.detect-changes.outputs.agent }}" >> $GITHUB_STEP_SUMMARY
+          echo "- HEPC: ${{ needs.detect-changes.outputs.hepc }}" >> $GITHUB_STEP_SUMMARY
+          echo "- gh-mrva: ${{ needs.detect-changes.outputs.ghmrva }}" >> $GITHUB_STEP_SUMMARY
+          echo "- VS Code: ${{ needs.detect-changes.outputs.vscode }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Helm: ${{ needs.detect-changes.outputs.helm }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check for failures
+        if: |
+          needs.helm-lint.result == 'failure' ||
+          needs.docker-build-test.result == 'failure'
+        run: exit 1

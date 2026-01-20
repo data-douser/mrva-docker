@@ -1,0 +1,148 @@
+{{/*
+HEPC Deployment
+Supports both Python (mrva-hepc-container) and Go (mrva-go-hepc) implementations
+*/}}
+{{- if .Values.hepc.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "codeql-mrva-chart.hepc.fullname" . }}
+  labels:
+    {{- include "codeql-mrva-chart.hepc.labels" . | nindent 4 }}
+  {{- with .Values.global.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.hepc.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "codeql-mrva-chart.hepc.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.hepc.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "codeql-mrva-chart.hepc.labels" . | nindent 8 }}
+        {{- with .Values.hepc.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "codeql-mrva-chart.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "codeql-mrva-chart.serviceAccountName" . }}
+      {{- with .Values.hepc.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: hepc
+          {{- with .Values.hepc.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.hepc.image.repository }}:{{ .Values.hepc.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.hepc.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          {{- with .Values.hepc.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.hepc.service.port }}
+              protocol: TCP
+          env:
+            {{- if and .Values.hepc.storage .Values.hepc.storage.gcs .Values.hepc.storage.gcs.bucket }}
+            - name: HEPC_GCS_BUCKET
+              value: {{ .Values.hepc.storage.gcs.bucket | quote }}
+            {{- end }}
+            {{- if and .Values.hepc.storage .Values.hepc.storage.gcs .Values.hepc.storage.gcs.prefix }}
+            - name: HEPC_GCS_PREFIX
+              value: {{ .Values.hepc.storage.gcs.prefix | quote }}
+            {{- end }}
+            {{- if and .Values.hepc.storage .Values.hepc.storage.gcs .Values.hepc.storage.gcs.credentialsSecret }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /etc/gcs-credentials/{{ .Values.hepc.storage.gcs.credentialsKey | default "credentials.json" }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "codeql-mrva-chart.configmapName" . }}
+          {{- if or .Values.hepc.persistence.enabled (and .Values.hepc.storage .Values.hepc.storage.gcs .Values.hepc.storage.gcs.credentialsSecret) }}
+          volumeMounts:
+            {{- if .Values.hepc.persistence.enabled }}
+            - name: hepc-data
+              mountPath: {{ .Values.hepc.storage.localPath | default "/data" }}
+            {{- end }}
+            {{- if and .Values.hepc.storage .Values.hepc.storage.gcs .Values.hepc.storage.gcs.credentialsSecret }}
+            - name: gcs-credentials
+              mountPath: /etc/gcs-credentials
+              readOnly: true
+            {{- end }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          {{- with .Values.hepc.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if or .Values.hepc.persistence.enabled (and .Values.hepc.storage .Values.hepc.storage.gcs .Values.hepc.storage.gcs.credentialsSecret) }}
+      volumes:
+        {{- if .Values.hepc.persistence.enabled }}
+        - name: hepc-data
+          {{- if .Values.hepc.persistence.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.hepc.persistence.existingClaim }}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ include "codeql-mrva-chart.hepc.fullname" . }}-data
+          {{- end }}
+        {{- end }}
+        {{- if and .Values.hepc.storage .Values.hepc.storage.gcs .Values.hepc.storage.gcs.credentialsSecret }}
+        - name: gcs-credentials
+          secret:
+            secretName: {{ .Values.hepc.storage.gcs.credentialsSecret }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.hepc.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hepc.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hepc.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+{{- if and .Values.hepc.persistence.enabled (not .Values.hepc.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "codeql-mrva-chart.hepc.fullname" . }}-data
+  labels:
+    {{- include "codeql-mrva-chart.hepc.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.hepc.persistence.accessMode | default "ReadWriteOnce" }}
+  {{- if .Values.hepc.persistence.storageClass }}
+  storageClassName: {{ .Values.hepc.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.hepc.persistence.size | default "50Gi" }}
+{{- end }}
+{{- end }}
