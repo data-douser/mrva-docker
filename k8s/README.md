@@ -381,10 +381,12 @@ hepc:
     - "0.0.0.0"
     - "--port"
     - "8070"
+    - "--gcs-bucket"
+    - "YOUR_GCS_BUCKET_NAME"
   storage:
     type: gcs
     gcs:
-      bucket: "your-gcs-bucket"
+      bucket: "YOUR_GCS_BUCKET_NAME"
       prefix: ""
       # No credentialsSecret needed with Workload Identity!
 
@@ -392,7 +394,7 @@ serviceAccount:
   create: true
   annotations:
     # Link to GCP service account via Workload Identity
-    iam.gke.io/gcp-service-account: "hepc-sa@YOUR_PROJECT.iam.gserviceaccount.com"
+    iam.gke.io/gcp-service-account: "hepc-gcs-reader@YOUR_PROJECT.iam.gserviceaccount.com"
 ```
 
 *Full documentation coming soon...*
