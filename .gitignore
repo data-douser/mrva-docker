@@ -51,3 +51,5 @@ TAGS
 containers/agent/mrvaagent
 containers/ghmrva/gh-mrva
 containers/server/mrvaserver
+
+*key.json

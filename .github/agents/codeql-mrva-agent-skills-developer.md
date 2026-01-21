@@ -12,6 +12,10 @@ tools:
   - 'todo'
   - 'web'
 handoffs:
+  - label: Use the 'test-helm-chart-on-gke' skill
+    agent: codeql-mrva-k8s-helm-chart-developer
+    prompt: 'Use the `test-helm-chart-on-gke` skill to test the Helm chart on a GKE cluster, making changes to the custom values (preferred) and/or templates (less preferred) as needed.'
+    send: false # do not send automatically; wait for user confirmation
   - label: Use the 'test-helm-chart-on-minikube' skill
     agent: codeql-mrva-k8s-helm-chart-developer
     prompt: 'Use the `test-helm-chart-on-minikube` skill to test the Helm chart on a Minikube cluster, making changes to the custom values (preferred) and/or templates (less preferred) as needed.'
