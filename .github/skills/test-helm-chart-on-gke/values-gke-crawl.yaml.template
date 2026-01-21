@@ -1,0 +1,75 @@
+# values-gke-crawl.yaml.template
+# Template for minimal HEPC deployment on GKE with GCS storage (Crawl stage)
+#
+# INSTRUCTIONS:
+# 1. Copy this file to your working directory as `values-gke-crawl.yaml`
+# 2. Replace all YOUR_* placeholders with your actual values
+# 3. Ensure your GCS bucket contains CodeQL databases with codeql-database.yml files
+#
+# Example:
+#   cp .github/skills/test-helm-chart-on-gke/values-gke-crawl.yaml.template ./values-gke-crawl.yaml
+#   # Edit values-gke-crawl.yaml with your bucket name
+#   helm install mrva k8s/codeql-mrva-chart -n mrva -f values-gke-crawl.yaml
+
+# Disable all services except HEPC
+server:
+  enabled: false
+
+agent:
+  enabled: false
+
+postgres:
+  enabled: false
+
+minio:
+  enabled: false
+
+rabbitmq:
+  enabled: false
+
+codeserver:
+  enabled: false
+
+ghmrva:
+  enabled: false
+
+# HEPC Configuration with GCS
+hepc:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/data-douser/codeql-mrva-hepc
+    tag: latest
+    pullPolicy: Always
+  command:
+    - "hepc-server"
+    - "--storage"
+    - "gcs"
+    - "--host"
+    - "0.0.0.0"
+    - "--port"
+    - "8070"
+    - "--gcs-bucket"
+    - "YOUR_GCS_BUCKET_NAME"  # <-- REPLACE with your bucket name
+  service:
+    type: ClusterIP
+    port: 8070
+  storage:
+    type: gcs
+    gcs:
+      bucket: "YOUR_GCS_BUCKET_NAME"  # <-- REPLACE with your bucket name
+      prefix: ""  # Optional: set if databases are under a prefix
+      credentialsSecret: "hepc-gcs-credentials"
+      credentialsKey: "credentials.json"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Service account (using default K8s SA, no Workload Identity yet)
+serviceAccount:
+  create: true
+  annotations: {}

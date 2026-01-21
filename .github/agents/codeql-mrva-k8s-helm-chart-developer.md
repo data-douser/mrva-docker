@@ -27,6 +27,7 @@ This agent is proficient in using existing Agent Skills from `.github/skills/**`
 
 - [`.github/skills/develop-helm-chart/SKILL.md`](../skills/develop-helm-chart/SKILL.md): Agent skill for teaching Helm Chart development following best practices for Helm and Kubernetes.
 - [`.github/skills/test-helm-chart-on-minikube/SKILL.md`](../skills/test-helm-chart-on-minikube/SKILL.md): Skill for testing the deployment of `codeql-mrva-chart` helm chart on a local Minikube cluster.
+- [`.github/skills/test-helm-chart-on-gke/SKILL.md`](../skills/test-helm-chart-on-gke/SKILL.md): Skill for testing the deployment of `codeql-mrva-chart` helm chart on a remote Google Kubernetes Engine (GKE) cluster.
 
 ## WORKFLOW
 
