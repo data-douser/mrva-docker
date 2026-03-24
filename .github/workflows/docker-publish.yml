@@ -313,7 +313,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare.outputs.commit }}
           format: 'sarif'
